@@ -33,6 +33,11 @@ so that generated graph files are persisted on the host.
 
 A helper CLI `proxmoxsync` queries a Proxmox host using the REST API and writes a graph definition to `data/graph.json`.
 Use `-file` to change the output file and `-insecure` to skip TLS certificate verification if needed.
+The `-host` flag expects only the base URL of the Proxmox instance (e.g.
+`https://pve.example.com:8006`).
+Do **not** include the `/api2` path segment as the tool appends it
+automatically. Providing the full API path will cause a login failure like
+`no such file '/json/access/ticket'`.
 
 ### Usage
 
