@@ -238,9 +238,9 @@ func getVMs(client *http.Client, host, ticket string) ([]vmInfo, error) {
 	}
 	var lr struct {
 		Data []struct {
-			VMID string `json:"vmid"`
-			Name string `json:"name"`
-			Node string `json:"node"`
+			VMID json.Number `json:"vmid"`
+			Name string      `json:"name"`
+			Node string      `json:"node"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &lr); err != nil {
@@ -248,8 +248,8 @@ func getVMs(client *http.Client, host, ticket string) ([]vmInfo, error) {
 	}
 	var vms []vmInfo
 	for _, d := range lr.Data {
-		if d.VMID != "" && d.Name != "" {
-			vms = append(vms, vmInfo{Node: d.Node, VMID: d.VMID, Name: d.Name})
+		if d.VMID.String() != "" && d.Name != "" {
+			vms = append(vms, vmInfo{Node: d.Node, VMID: d.VMID.String(), Name: d.Name})
 		}
 	}
 	return vms, nil
