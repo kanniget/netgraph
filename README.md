@@ -32,13 +32,15 @@ so that generated graph files are persisted on the host.
 ## Proxmox Sync Tool
 
 A helper CLI `proxmoxsync` queries a Proxmox host using the REST API and writes a graph definition to `data/graph.json`.
+Use `-file` to change the output file and `-insecure` to skip TLS certificate verification if needed.
 
 ### Usage
 
 ```bash
 # run against a Proxmox host using the container
 docker compose run --rm netgraph ./proxmoxsync \
-  -host https://pve.example.com:8006 -user root@pam -pass secret
+  -host https://pve.example.com:8006 -user root@pam -pass secret \
+  -file mygraph.json -insecure
 ```
 
 The tool retrieves SDN networks, hosts, and the network interfaces each host is attached to. Networks and hosts are added as nodes while links between them represent the attached interfaces.
