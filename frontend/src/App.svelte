@@ -9,7 +9,8 @@ const icons = {
     rtr: '/icons/router-network.svg',
     fw: '/icons/shield-check.svg',
     zone: '/icons/wifi.svg',
-    bridge: '/icons/bridge.svg'
+    bridge: '/icons/bridge.svg',
+    nic: '/icons/nic.svg'
 };
 
 let graph = {nodes:[], links:[]};
