@@ -268,7 +268,7 @@ func getVMIfaces(client *http.Client, host, ticket string, vm vmInfo) ([]string,
 		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
 	}
 	var cfg struct {
-		Data map[string]string `json:"data"`
+		Data map[string]any `json:"data"`
 	}
 	if err := json.Unmarshal(body, &cfg); err != nil {
 		return nil, err
@@ -276,12 +276,14 @@ func getVMIfaces(client *http.Client, host, ticket string, vm vmInfo) ([]string,
 	var ifaces []string
 	for k, v := range cfg.Data {
 		if strings.HasPrefix(k, "net") {
-			parts := strings.Split(v, ",")
-			for _, p := range parts {
-				if strings.HasPrefix(p, "bridge=") {
-					b := strings.TrimPrefix(p, "bridge=")
-					if b != "" {
-						ifaces = append(ifaces, b)
+			if val, ok := v.(string); ok {
+				parts := strings.Split(val, ",")
+				for _, p := range parts {
+					if strings.HasPrefix(p, "bridge=") {
+						b := strings.TrimPrefix(p, "bridge=")
+						if b != "" {
+							ifaces = append(ifaces, b)
+						}
 					}
 				}
 			}
