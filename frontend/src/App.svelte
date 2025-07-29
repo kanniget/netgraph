@@ -26,6 +26,8 @@ let linkSelection;
 let nodeSelection;
 let adjacency = new Map();
 let linkMap = new Map();
+let locatedNodeId = '';
+let highlightedNode = null;
 
 function nodeType(nodeRef){
     if(typeof nodeRef === 'object' && nodeRef !== null){
@@ -64,6 +66,8 @@ async function loadGraph(){
     graph.links.forEach(l => {
         if (l.weight === undefined) l.weight = 1;
     });
+    locatedNodeId = '';
+    highlightedNode = null;
     buildMaps();
     draw();
 }
@@ -187,8 +191,15 @@ function findPath(startId, endId){
 }
 
 function updateHighlights(){
-    nodeSelection.select('image').classed('selected', d => selectedNodes.includes(d));
+    nodeSelection.select('image')
+        .classed('selected', d => selectedNodes.includes(d))
+        .classed('located', d => highlightedNode && d.id === highlightedNode.id);
     linkSelection.attr('stroke', d => pathLinks.includes(d) ? pathColor : '#999');
+}
+
+function highlightFromList(){
+    highlightedNode = graph.nodes.find(n => n.id === locatedNodeId) || null;
+    updateHighlights();
 }
 
 function nodeClicked(event, d){
@@ -229,6 +240,12 @@ function applyWeights() {
         </select>
         <button on:click={openWeightsDialog} style="margin-left:4px;">Weights</button>
         <input type="color" bind:value={pathColor} on:input={updateHighlights} style="margin-left:4px;" title="Path color"/>
+        <select bind:value={locatedNodeId} on:change={highlightFromList} style="margin-left:4px;">
+            <option value="">Find node...</option>
+            {#each graph.nodes as n}
+                <option value={n.id}>{n.name || n.id}</option>
+            {/each}
+        </select>
     </div>
     {#if showWeights}
     <div class="dialog">
@@ -294,6 +311,11 @@ svg {
 
 image.selected {
     stroke: red;
+    stroke-width: 2px;
+}
+
+image.located {
+    stroke: blue;
     stroke-width: 2px;
 }
 </style>
