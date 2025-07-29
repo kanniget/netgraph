@@ -142,7 +142,7 @@ func main() {
 
 	for _, v := range vms {
 		if _, ok := nodeSeen[v.Name]; !ok {
-			graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "host", Name: v.Name})
+			graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name})
 			nodeSeen[v.Name] = struct{}{}
 		}
 	}
