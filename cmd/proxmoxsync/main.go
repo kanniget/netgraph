@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Graph struct {
@@ -32,6 +33,12 @@ type ticketResponse struct {
 	Data struct {
 		Ticket string `json:"ticket"`
 	} `json:"data"`
+}
+
+type vmInfo struct {
+	Node string
+	VMID string
+	Name string
 }
 
 func main() {
@@ -73,23 +80,23 @@ func main() {
 		graph.Nodes = append(graph.Nodes, Node{ID: n, Type: "net", Name: n})
 	}
 
-	hosts, err := getHosts(client, *host, ticket)
+	vms, err := getVMs(client, *host, ticket)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "get hosts error:", err)
+		fmt.Fprintln(os.Stderr, "get vms error:", err)
 	}
 
-	for _, h := range hosts {
-		graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h})
+	for _, v := range vms {
+		graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "host", Name: v.Name})
 	}
 
-	for _, h := range hosts {
-		ifaces, err := getHostIfaces(client, *host, ticket, h)
+	for _, v := range vms {
+		ifaces, err := getVMIfaces(client, *host, ticket, v)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "get interfaces error:", err)
+			fmt.Fprintln(os.Stderr, "get vm interfaces error:", err)
 			continue
 		}
 		for _, iface := range ifaces {
-			graph.Links = append(graph.Links, Link{Source: iface, Target: h})
+			graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
 		}
 	}
 
@@ -212,6 +219,72 @@ func getHostIfaces(client *http.Client, host, ticket, node string) ([]string, er
 	for _, d := range lr.Data {
 		if d.Iface != "" {
 			ifaces = append(ifaces, d.Iface)
+		}
+	}
+	return ifaces, nil
+}
+
+func getVMs(client *http.Client, host, ticket string) ([]vmInfo, error) {
+	req, _ := http.NewRequest("GET", host+"/api2/json/cluster/resources?type=vm", nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var lr struct {
+		Data []struct {
+			VMID string `json:"vmid"`
+			Name string `json:"name"`
+			Node string `json:"node"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &lr); err != nil {
+		return nil, err
+	}
+	var vms []vmInfo
+	for _, d := range lr.Data {
+		if d.VMID != "" && d.Name != "" {
+			vms = append(vms, vmInfo{Node: d.Node, VMID: d.VMID, Name: d.Name})
+		}
+	}
+	return vms, nil
+}
+
+func getVMIfaces(client *http.Client, host, ticket string, vm vmInfo) ([]string, error) {
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api2/json/nodes/%s/qemu/%s/config", host, vm.Node, vm.VMID), nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var cfg struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(body, &cfg); err != nil {
+		return nil, err
+	}
+	var ifaces []string
+	for k, v := range cfg.Data {
+		if strings.HasPrefix(k, "net") {
+			parts := strings.Split(v, ",")
+			for _, p := range parts {
+				if strings.HasPrefix(p, "bridge=") {
+					b := strings.TrimPrefix(p, "bridge=")
+					if b != "" {
+						ifaces = append(ifaces, b)
+					}
+				}
+			}
 		}
 	}
 	return ifaces, nil
