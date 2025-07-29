@@ -6,7 +6,9 @@ const icons = {
     net: '/icons/cloud.svg',
     host: '/icons/computer-desktop.svg',
     rtr: '/icons/server-stack.svg',
-    fw: '/icons/shield-check.svg'
+    fw: '/icons/shield-check.svg',
+    zone: '/icons/wifi.svg',
+    bridge: '/icons/server-stack.svg'
 };
 
 let graph = {nodes:[], links:[]};
@@ -66,15 +68,21 @@ function draw(){
 
     node.append('image')
         .attr('href', d => icons[d.type])
-        .attr('width', d => d.type === 'net' ? 96 : 24)
-        .attr('height', d => d.type === 'net' ? 96 : 24)
-        .attr('x', d => d.type === 'net' ? -48 : -12)
-        .attr('y', d => d.type === 'net' ? -48 : -12);
+        .attr('width', d => (d.type === 'net' || d.type === 'zone') ? 96 : 24)
+        .attr('height', d => (d.type === 'net' || d.type === 'zone') ? 96 : 24)
+        .attr('x', d => (d.type === 'net' || d.type === 'zone') ? -48 : -12)
+        .attr('y', d => (d.type === 'net' || d.type === 'zone') ? -48 : -12);
 
     node.append('text')
         .attr('y', 20)
         .attr('text-anchor', 'middle')
         .text(d => d.name || d.id);
+
+    node.append('text')
+        .attr('y', 32)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '10px')
+        .text(d => d.type);
 
     node.append('title').text(d => d.name || d.id);
 

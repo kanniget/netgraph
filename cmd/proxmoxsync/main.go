@@ -72,15 +72,41 @@ func main() {
 	graph := Graph{}
 	nodeSeen := make(map[string]struct{})
 
+	zones, err := getZones(client, *host, ticket)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "get zones error:", err)
+	}
+
+	for _, z := range zones {
+		if _, ok := nodeSeen[z]; !ok {
+			graph.Nodes = append(graph.Nodes, Node{ID: z, Type: "zone", Name: z})
+			nodeSeen[z] = struct{}{}
+		}
+	}
+
 	networks, err := getNetworks(client, *host, ticket)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "get networks error:", err)
 	}
 
 	for _, n := range networks {
-		if _, ok := nodeSeen[n]; !ok {
-			graph.Nodes = append(graph.Nodes, Node{ID: n, Type: "net", Name: n})
-			nodeSeen[n] = struct{}{}
+		if _, ok := nodeSeen[n.ID]; !ok {
+			graph.Nodes = append(graph.Nodes, Node{ID: n.ID, Type: "net", Name: n.ID})
+			nodeSeen[n.ID] = struct{}{}
+		}
+		if n.Zone != "" {
+			if _, ok := nodeSeen[n.Zone]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: n.Zone, Type: "zone", Name: n.Zone})
+				nodeSeen[n.Zone] = struct{}{}
+			}
+			graph.Links = append(graph.Links, Link{Source: n.ID, Target: n.Zone})
+		}
+		if n.Bridge != "" {
+			if _, ok := nodeSeen[n.Bridge]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: n.Bridge, Type: "bridge", Name: n.Bridge})
+				nodeSeen[n.Bridge] = struct{}{}
+			}
+			graph.Links = append(graph.Links, Link{Source: n.ID, Target: n.Bridge})
 		}
 	}
 
@@ -154,13 +180,22 @@ func login(client *http.Client, host, user, pass string) (string, error) {
 
 type listResponse struct {
 	Data []struct {
-		ID    string `json:"id"`
-		Node  string `json:"node"`
-		Iface string `json:"iface"`
+		ID     string `json:"id"`
+		Node   string `json:"node"`
+		Iface  string `json:"iface"`
+		Zone   string `json:"zone"`
+		Bridge string `json:"bridge"`
+		Type   string `json:"type"`
 	} `json:"data"`
 }
 
-func getNetworks(client *http.Client, host, ticket string) ([]string, error) {
+type networkInfo struct {
+	ID     string
+	Zone   string
+	Bridge string
+}
+
+func getNetworks(client *http.Client, host, ticket string) ([]networkInfo, error) {
 	req, _ := http.NewRequest("GET", host+"/api2/json/cluster/sdn/vnets", nil)
 	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
 	resp, err := client.Do(req)
@@ -176,13 +211,38 @@ func getNetworks(client *http.Client, host, ticket string) ([]string, error) {
 	if err := json.Unmarshal(body, &lr); err != nil {
 		return nil, err
 	}
-	var nets []string
+	var nets []networkInfo
 	for _, d := range lr.Data {
 		if d.ID != "" {
-			nets = append(nets, d.ID)
+			nets = append(nets, networkInfo{ID: d.ID, Zone: d.Zone, Bridge: d.Bridge})
 		}
 	}
 	return nets, nil
+}
+
+func getZones(client *http.Client, host, ticket string) ([]string, error) {
+	req, _ := http.NewRequest("GET", host+"/api2/json/cluster/sdn/zones", nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var lr listResponse
+	if err := json.Unmarshal(body, &lr); err != nil {
+		return nil, err
+	}
+	var zones []string
+	for _, d := range lr.Data {
+		if d.ID != "" {
+			zones = append(zones, d.ID)
+		}
+	}
+	return zones, nil
 }
 
 func getHosts(client *http.Client, host, ticket string) ([]string, error) {
