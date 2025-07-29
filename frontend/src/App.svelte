@@ -21,6 +21,8 @@ onMount(async () => {
 });
 
 async function loadGraph(){
+    const svg = d3.select('#graph');
+    svg.selectAll('*').remove();
     const res = await fetch(`/api/graph?file=${selectedFile}`);
     graph = await res.json();
     draw();
