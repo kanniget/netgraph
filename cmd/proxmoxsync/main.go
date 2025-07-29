@@ -110,6 +110,31 @@ func main() {
 		}
 	}
 
+	hosts, err := getHosts(client, *host, ticket)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "get hosts error:", err)
+	}
+
+	for _, h := range hosts {
+		if _, ok := nodeSeen[h]; !ok {
+			graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h})
+			nodeSeen[h] = struct{}{}
+		}
+
+		ifaces, err := getHostIfaces(client, *host, ticket, h)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "get host interfaces error:", err)
+			continue
+		}
+		for _, iface := range ifaces {
+			if _, ok := nodeSeen[iface]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
+				nodeSeen[iface] = struct{}{}
+			}
+			graph.Links = append(graph.Links, Link{Source: iface, Target: h})
+		}
+	}
+
 	vms, err := getVMs(client, *host, ticket)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "get vms error:", err)
@@ -130,7 +155,7 @@ func main() {
 		}
 		for _, iface := range ifaces {
 			if _, ok := nodeSeen[iface]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "net", Name: iface})
+				graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
 				nodeSeen[iface] = struct{}{}
 			}
 			graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})

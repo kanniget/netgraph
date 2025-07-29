@@ -50,5 +50,5 @@ docker compose run --rm netgraph ./proxmoxsync \
 
 The tool retrieves SDN networks, virtual machines, and the networks each VM is connected to. Networks and VMs are added as nodes while links between them represent the attached interfaces.
 
-It also gathers SDN zones and bridge interfaces. Zones are added as `zone` nodes and bridges as `bridge` nodes. Networks are linked to their zone and bridge when that information is available.
+It also gathers SDN zones and bridge interfaces. Zones are added as `zone` nodes and bridges as `bridge` nodes. Networks are linked to their zone and bridge when that information is available. Host bridge interfaces are now detected and marked as `bridge` nodes.
 
