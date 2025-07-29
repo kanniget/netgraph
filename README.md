@@ -52,3 +52,21 @@ The tool retrieves SDN networks, virtual machines, and the networks each VM is c
 
 It also gathers SDN zones and bridge interfaces. Zones are added as `zone` nodes and bridges as `bridge` nodes. Networks are linked to their zone and bridge when that information is available. Host bridge interfaces are now detected and marked as `bridge` nodes.
 
+## Navigating the Frontend
+
+With the server running, navigate to `http://localhost:8080` to view the graph
+visualisation. A small toolbar in the top‑left lets you control how the data is
+displayed:
+
+* **File selector** – choose one of the JSON files in the `data` directory to
+  load a different graph.
+* **Weights** – opens a dialog to change the weight applied to each link type.
+  Larger weights increase the distance between connected nodes when the
+  simulation runs.
+* **Path colour picker** – select the colour used when highlighting paths
+  between two nodes.
+
+The graph supports mouse wheel zooming and panning by dragging empty space. You
+can drag nodes to reposition them. Clicking two nodes highlights the path
+between them using the chosen colour.
+
