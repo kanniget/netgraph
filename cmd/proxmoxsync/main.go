@@ -13,6 +13,14 @@ import (
 	"strings"
 )
 
+var verbose bool
+
+func logf(format string, a ...interface{}) {
+	if verbose {
+		fmt.Printf(format+"\n", a...)
+	}
+}
+
 type Graph struct {
 	Nodes []Node `json:"nodes"`
 	Links []Link `json:"links"`
@@ -48,7 +56,14 @@ func main() {
 	out := flag.String("out", filepath.Join("data", "graph.json"), "output graph json (deprecated)")
 	outfile := flag.String("file", "", "output graph json file")
 	insecure := flag.Bool("insecure", false, "ignore TLS certificate errors")
+	verboseFlag := flag.Bool("verbose", false, "enable verbose output")
+	flag.BoolVar(verboseFlag, "v", false, "enable verbose output (shorthand)")
 	flag.Parse()
+
+	verbose = *verboseFlag
+	if verbose {
+		fmt.Println("verbose output enabled")
+	}
 
 	if *host == "" || *pass == "" {
 		fmt.Fprintln(os.Stderr, "host and pass are required")
@@ -63,6 +78,7 @@ func main() {
 		client = &http.Client{}
 	}
 
+	logf("logging in to %s as %s", *host, *user)
 	ticket, err := login(client, *host, *user, *pass)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "login error:", err)
@@ -72,10 +88,12 @@ func main() {
 	graph := Graph{}
 	nodeSeen := make(map[string]struct{})
 
+	logf("retrieving zones")
 	zones, err := getZones(client, *host, ticket)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "get zones error:", err)
 	}
+	logf("retrieved %d zones", len(zones))
 
 	for _, z := range zones {
 		if _, ok := nodeSeen[z]; !ok {
@@ -84,10 +102,12 @@ func main() {
 		}
 	}
 
+	logf("retrieving networks")
 	networks, err := getNetworks(client, *host, ticket)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "get networks error:", err)
 	}
+	logf("retrieved %d networks", len(networks))
 
 	for _, n := range networks {
 		if _, ok := nodeSeen[n.ID]; !ok {
@@ -110,10 +130,12 @@ func main() {
 		}
 	}
 
+	logf("retrieving hosts")
 	hosts, err := getHosts(client, *host, ticket)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "get hosts error:", err)
 	}
+	logf("retrieved %d hosts", len(hosts))
 
 	for _, h := range hosts {
 		if _, ok := nodeSeen[h]; !ok {
@@ -121,11 +143,13 @@ func main() {
 			nodeSeen[h] = struct{}{}
 		}
 
+		logf("retrieving interfaces for host %s", h)
 		ifaces, err := getHostIfaces(client, *host, ticket, h)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "get host interfaces error:", err)
 			continue
 		}
+		logf("host %s has %d interfaces", h, len(ifaces))
 		for _, iface := range ifaces {
 			if _, ok := nodeSeen[iface]; !ok {
 				graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
@@ -135,10 +159,12 @@ func main() {
 		}
 	}
 
+	logf("retrieving VMs")
 	vms, err := getVMs(client, *host, ticket)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "get vms error:", err)
 	}
+	logf("retrieved %d VMs", len(vms))
 
 	for _, v := range vms {
 		if _, ok := nodeSeen[v.Name]; !ok {
@@ -148,11 +174,13 @@ func main() {
 	}
 
 	for _, v := range vms {
+		logf("retrieving interfaces for VM %s", v.Name)
 		ifaces, err := getVMIfaces(client, *host, ticket, v)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "get vm interfaces error:", err)
 			continue
 		}
+		logf("VM %s has %d interfaces", v.Name, len(ifaces))
 		for _, iface := range ifaces {
 			if _, ok := nodeSeen[iface]; !ok {
 				graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
@@ -171,6 +199,7 @@ func main() {
 	if *outfile != "" {
 		path = *outfile
 	}
+	logf("writing graph to %s", path)
 	if err := os.WriteFile(path, b, 0644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
