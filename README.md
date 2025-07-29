@@ -26,6 +26,9 @@ Build and run the stack using [Docker Compose](https://docs.docker.com/compose/)
 docker compose up --build
 ```
 
+The compose configuration mounts the local `data` directory into the container
+so that generated graph files are persisted on the host.
+
 ## Proxmox Sync Tool
 
 A helper CLI `proxmoxsync` queries a Proxmox host using the REST API and writes a graph definition to `data/graph.json`.
@@ -33,11 +36,9 @@ A helper CLI `proxmoxsync` queries a Proxmox host using the REST API and writes 
 ### Usage
 
 ```bash
-# build the tool
-go build ./cmd/proxmoxsync
-
-# run against a Proxmox host
-./proxmoxsync -host https://pve.example.com:8006 -user root@pam -pass secret
+# run against a Proxmox host using the container
+docker compose run --rm netgraph ./proxmoxsync \
+  -host https://pve.example.com:8006 -user root@pam -pass secret
 ```
 
 The tool retrieves SDN networks, hosts, and the network interfaces each host is attached to. Networks and hosts are added as nodes while links between them represent the attached interfaces.
