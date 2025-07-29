@@ -5,6 +5,7 @@ import * as d3 from 'd3';
 const icons = {
     net: '/icons/cloud.svg',
     host: '/icons/computer-desktop.svg',
+    vm: '/icons/computer-desktop.svg',
     rtr: '/icons/server-stack.svg',
     fw: '/icons/shield-check.svg',
     zone: '/icons/wifi.svg',
