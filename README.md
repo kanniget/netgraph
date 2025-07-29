@@ -17,3 +17,11 @@ go run ./server
 ```
 
 The server hosts the built frontend and provides the `/api/graph` endpoint serving a JSON graph dataset.
+
+## Docker Compose
+
+Build and run the stack using [Docker Compose](https://docs.docker.com/compose/):
+
+```bash
+docker compose up --build
+```
