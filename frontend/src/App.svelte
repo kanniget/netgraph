@@ -19,6 +19,13 @@ let selectedFile = '';
 let showWeights = false;
 let typeWeights = [];
 let simulation;
+let selectedNodes = [];
+let pathLinks = [];
+let pathColor = '#ff0000';
+let linkSelection;
+let nodeSelection;
+let adjacency = new Map();
+let linkMap = new Map();
 
 function nodeType(nodeRef){
     if(typeof nodeRef === 'object' && nodeRef !== null){
@@ -57,6 +64,7 @@ async function loadGraph(){
     graph.links.forEach(l => {
         if (l.weight === undefined) l.weight = 1;
     });
+    buildMaps();
     draw();
 }
 
@@ -81,13 +89,13 @@ function draw(){
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width/2, height/2));
 
-    const link = container.append('g')
+    linkSelection = container.append('g')
         .attr('stroke', '#999')
         .selectAll('line')
         .data(graph.links)
         .enter().append('line');
 
-    const node = container.append('g')
+    nodeSelection = container.append('g')
         .selectAll('g')
         .data(graph.nodes)
         .enter().append('g')
@@ -95,34 +103,35 @@ function draw(){
             .on('start', dragstarted)
             .on('drag', dragged)
             .on('end', dragended));
+    nodeSelection.on('click', nodeClicked);
 
-    node.append('image')
+    nodeSelection.append('image')
         .attr('href', d => icons[d.type])
         .attr('width', d => (d.type === 'net' || d.type === 'zone') ? 96 : 24)
         .attr('height', d => (d.type === 'net' || d.type === 'zone') ? 96 : 24)
         .attr('x', d => (d.type === 'net' || d.type === 'zone') ? -48 : -12)
         .attr('y', d => (d.type === 'net' || d.type === 'zone') ? -48 : -12);
 
-    node.append('text')
+    nodeSelection.append('text')
         .attr('y', 20)
         .attr('text-anchor', 'middle')
         .text(d => d.name || d.id);
 
-    node.append('text')
+    nodeSelection.append('text')
         .attr('y', 32)
         .attr('text-anchor', 'middle')
         .attr('font-size', '10px')
         .text(d => d.type);
 
-    node.append('title').text(d => d.name || d.id);
+    nodeSelection.append('title').text(d => d.name || d.id);
 
     simulation.on('tick', () => {
-        link.attr('x1', d => d.source.x)
+        linkSelection.attr('x1', d => d.source.x)
             .attr('y1', d => d.source.y)
             .attr('x2', d => d.target.x)
             .attr('y2', d => d.target.y);
 
-        node.attr('transform', d => `translate(${d.x},${d.y})`);
+        nodeSelection.attr('transform', d => `translate(${d.x},${d.y})`);
     });
 
     function dragstarted(event) {
@@ -136,11 +145,64 @@ function draw(){
         event.subject.fy = event.y;
     }
 
-    function dragended(event) {
+function dragended(event) {
         if (!event.active) simulation.alphaTarget(0);
         event.subject.fx = null;
         event.subject.fy = null;
     }
+}
+
+function buildMaps(){
+    adjacency = new Map();
+    linkMap = new Map();
+    graph.links.forEach(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        if(!adjacency.has(s)) adjacency.set(s, []);
+        if(!adjacency.has(t)) adjacency.set(t, []);
+        adjacency.get(s).push(t);
+        adjacency.get(t).push(s);
+        linkMap.set(s + '-' + t, l);
+        linkMap.set(t + '-' + s, l);
+    });
+}
+
+function findPath(startId, endId){
+    const queue = [[startId, []]];
+    const visited = new Set();
+    while(queue.length){
+        const [node, path] = queue.shift();
+        if(node === endId) return path;
+        if(visited.has(node)) continue;
+        visited.add(node);
+        const neighbors = adjacency.get(node) || [];
+        neighbors.forEach(n => {
+            if(!visited.has(n)){
+                const l = linkMap.get(node + '-' + n);
+                queue.push([n, [...path, l]]);
+            }
+        });
+    }
+    return [];
+}
+
+function updateHighlights(){
+    nodeSelection.select('image').classed('selected', d => selectedNodes.includes(d));
+    linkSelection.attr('stroke', d => pathLinks.includes(d) ? pathColor : '#999');
+}
+
+function nodeClicked(event, d){
+    if(selectedNodes.length === 2){
+        selectedNodes = [];
+        pathLinks = [];
+    }
+    if(!selectedNodes.includes(d)){
+        selectedNodes.push(d);
+    }
+    if(selectedNodes.length === 2){
+        pathLinks = findPath(selectedNodes[0].id, selectedNodes[1].id);
+    }
+    updateHighlights();
 }
 
 function applyWeights() {
@@ -166,6 +228,7 @@ function applyWeights() {
             {/each}
         </select>
         <button on:click={openWeightsDialog} style="margin-left:4px;">Weights</button>
+        <input type="color" bind:value={pathColor} on:input={updateHighlights} style="margin-left:4px;" title="Path color"/>
     </div>
     {#if showWeights}
     <div class="dialog">
@@ -227,5 +290,10 @@ svg {
 .buttons {
     margin-top: 8px;
     text-align: right;
+}
+
+image.selected {
+    stroke: red;
+    stroke-width: 2px;
 }
 </style>
