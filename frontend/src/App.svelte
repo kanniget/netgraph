@@ -1,6 +1,14 @@
 <script>
 import { onMount } from 'svelte';
 import * as d3 from 'd3';
+
+const icons = {
+    net: '/icons/wifi.svg',
+    host: '/icons/computer-desktop.svg',
+    rtr: '/icons/server-stack.svg',
+    fw: '/icons/shield-check.svg'
+};
+
 let graph = {nodes:[], links:[]};
 
 onMount(async () => {
@@ -27,12 +35,14 @@ function draw(){
         .enter().append('line');
 
     const node = svg.append('g')
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5)
-        .selectAll('circle')
+        .selectAll('image')
         .data(graph.nodes)
-        .enter().append('circle')
-        .attr('r', 8)
+        .enter().append('image')
+        .attr('href', d => icons[d.type])
+        .attr('width', 24)
+        .attr('height', 24)
+        .attr('x', -12)
+        .attr('y', -12)
         .call(d3.drag()
             .on('start', dragstarted)
             .on('drag', dragged)
@@ -46,8 +56,7 @@ function draw(){
             .attr('x2', d => d.target.x)
             .attr('y2', d => d.target.y);
 
-        node.attr('cx', d => d.x)
-            .attr('cy', d => d.y);
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
     });
 
     function dragstarted(event) {

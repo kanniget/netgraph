@@ -1,9 +1,9 @@
 {
   "nodes": [
-    {"id": "A"},
-    {"id": "B"},
-    {"id": "C"},
-    {"id": "D"}
+    {"id": "A", "type": "net"},
+    {"id": "B", "type": "host"},
+    {"id": "C", "type": "rtr"},
+    {"id": "D", "type": "fw"}
   ],
   "links": [
     {"source": "A", "target": "B"},
