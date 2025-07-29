@@ -35,20 +35,27 @@ function draw(){
         .enter().append('line');
 
     const node = svg.append('g')
-        .selectAll('image')
+        .selectAll('g')
         .data(graph.nodes)
-        .enter().append('image')
-        .attr('href', d => icons[d.type])
-        .attr('width', 24)
-        .attr('height', 24)
-        .attr('x', -12)
-        .attr('y', -12)
+        .enter().append('g')
         .call(d3.drag()
             .on('start', dragstarted)
             .on('drag', dragged)
             .on('end', dragended));
 
-    node.append('title').text(d => d.id);
+    node.append('image')
+        .attr('href', d => icons[d.type])
+        .attr('width', 24)
+        .attr('height', 24)
+        .attr('x', -12)
+        .attr('y', -12);
+
+    node.append('text')
+        .attr('y', 20)
+        .attr('text-anchor', 'middle')
+        .text(d => d.name || d.id);
+
+    node.append('title').text(d => d.name || d.id);
 
     simulation.on('tick', () => {
         link.attr('x1', d => d.source.x)
