@@ -112,6 +112,7 @@ function draw(){
 
     linkSelection = container.append('g')
         .attr('stroke', '#999')
+        .attr('stroke-width', 1)
         .selectAll('line')
         .data(graph.links)
         .enter().append('line');
@@ -211,7 +212,9 @@ function updateHighlights(){
     nodeSelection.select('image')
         .classed('selected', d => selectedNodes.includes(d))
         .classed('located', d => highlightedNode && d.id === highlightedNode.id);
-    linkSelection.attr('stroke', d => pathLinks.includes(d) ? pathColor : '#999');
+    linkSelection
+        .attr('stroke', d => pathLinks.includes(d) ? pathColor : '#999')
+        .attr('stroke-width', d => pathLinks.includes(d) ? 3 : 1);
 }
 
 function highlightFromList(){
