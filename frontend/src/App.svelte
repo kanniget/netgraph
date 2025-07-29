@@ -34,18 +34,28 @@ function draw(){
     const height = window.innerHeight;
     svg.attr('width', width).attr('height', height);
 
+    const container = svg.append('g');
+
+    const zoom = d3.zoom()
+        .scaleExtent([0.5, 5])
+        .on('zoom', (event) => {
+            container.attr('transform', event.transform);
+        });
+
+    svg.call(zoom);
+
     const simulation = d3.forceSimulation(graph.nodes)
         .force('link', d3.forceLink(graph.links).id(d => d.id).distance(100))
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width/2, height/2));
 
-    const link = svg.append('g')
+    const link = container.append('g')
         .attr('stroke', '#999')
         .selectAll('line')
         .data(graph.links)
         .enter().append('line');
 
-    const node = svg.append('g')
+    const node = container.append('g')
         .selectAll('g')
         .data(graph.nodes)
         .enter().append('g')
