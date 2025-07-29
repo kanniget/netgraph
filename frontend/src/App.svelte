@@ -3,7 +3,7 @@ import { onMount } from 'svelte';
 import * as d3 from 'd3';
 
 const icons = {
-    net: '/icons/wifi.svg',
+    net: '/icons/cloud.svg',
     host: '/icons/computer-desktop.svg',
     rtr: '/icons/server-stack.svg',
     fw: '/icons/shield-check.svg'
@@ -45,10 +45,10 @@ function draw(){
 
     node.append('image')
         .attr('href', d => icons[d.type])
-        .attr('width', 24)
-        .attr('height', 24)
-        .attr('x', -12)
-        .attr('y', -12);
+        .attr('width', d => d.type === 'net' ? 96 : 24)
+        .attr('height', d => d.type === 'net' ? 96 : 24)
+        .attr('x', d => d.type === 'net' ? -48 : -12)
+        .attr('y', d => d.type === 'net' ? -48 : -12);
 
     node.append('text')
         .attr('y', 20)
