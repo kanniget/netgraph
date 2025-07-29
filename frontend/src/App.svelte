@@ -6,10 +6,10 @@ const icons = {
     net: '/icons/cloud.svg',
     host: '/icons/server-stack.svg',
     vm: '/icons/computer-desktop.svg',
-    rtr: '/icons/server-stack.svg',
+    rtr: '/icons/router-network.svg',
     fw: '/icons/shield-check.svg',
     zone: '/icons/wifi.svg',
-    bridge: '/icons/server-stack.svg'
+    bridge: '/icons/bridge.svg'
 };
 
 let graph = {nodes:[], links:[]};
