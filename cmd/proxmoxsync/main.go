@@ -239,6 +239,7 @@ type listResponse struct {
 		Iface  string `json:"iface"`
 		Zone   string `json:"zone"`
 		Bridge string `json:"bridge"`
+		VNet   string `json:"vnet"`
 		Type   string `json:"type"`
 	} `json:"data"`
 }
@@ -267,8 +268,12 @@ func getNetworks(client *http.Client, host, ticket string) ([]networkInfo, error
 	}
 	var nets []networkInfo
 	for _, d := range lr.Data {
-		if d.ID != "" {
-			nets = append(nets, networkInfo{ID: d.ID, Zone: d.Zone, Bridge: d.Bridge})
+		id := d.ID
+		if id == "" {
+			id = d.VNet
+		}
+		if id != "" {
+			nets = append(nets, networkInfo{ID: id, Zone: d.Zone, Bridge: d.Bridge})
 		}
 	}
 	return nets, nil
