@@ -17,6 +17,7 @@ type Graph struct {
 type Node struct {
 	ID   string `json:"id"`
 	Type string `json:"type"`
+	Name string `json:"name"`
 }
 
 type Link struct {
