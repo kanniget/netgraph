@@ -16,6 +16,8 @@ const icons = {
 let graph = {nodes:[], links:[]};
 let files = [];
 let selectedFile = '';
+let showWeights = false;
+let simulation;
 
 onMount(async () => {
     const fRes = await fetch('/api/files');
@@ -29,6 +31,9 @@ async function loadGraph(){
     svg.selectAll('*').remove();
     const res = await fetch(`/api/graph?file=${selectedFile}`);
     graph = await res.json();
+    graph.links.forEach(l => {
+        if (l.weight === undefined) l.weight = 1;
+    });
     draw();
 }
 
@@ -48,8 +53,8 @@ function draw(){
 
     svg.call(zoom);
 
-    const simulation = d3.forceSimulation(graph.nodes)
-        .force('link', d3.forceLink(graph.links).id(d => d.id).distance(100))
+    simulation = d3.forceSimulation(graph.nodes)
+        .force('link', d3.forceLink(graph.links).id(d => d.id).distance(l => 200 / (l.weight || 1)))
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width/2, height/2));
 
@@ -114,6 +119,12 @@ function draw(){
         event.subject.fy = null;
     }
 }
+
+function applyWeights() {
+    simulation.force('link').distance(l => 200 / (l.weight || 1));
+    simulation.alpha(1).restart();
+    showWeights = false;
+}
 </script>
 
 <main>
@@ -123,7 +134,25 @@ function draw(){
                 <option value={f}>{f}</option>
             {/each}
         </select>
+        <button on:click={() => showWeights = true} style="margin-left:4px;">Weights</button>
     </div>
+    {#if showWeights}
+    <div class="dialog">
+        <div class="dialog-content">
+            <h3>Link Weights</h3>
+            {#each graph.links as l}
+            <div class="weight-row">
+                <span>{l.source.id || l.source} - {l.target.id || l.target}</span>
+                <input type="number" min="0.1" step="0.1" bind:value={l.weight}>
+            </div>
+            {/each}
+            <div class="buttons">
+                <button on:click={applyWeights}>Apply</button>
+                <button on:click={() => showWeights = false}>Close</button>
+            </div>
+        </div>
+    </div>
+    {/if}
     <svg id="graph" style="width:100%; height:100%;"></svg>
 </main>
 
@@ -140,5 +169,32 @@ main {
 
 svg {
     border: 1px solid #ccc;
+}
+
+.dialog {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    z-index: 20;
+}
+
+.dialog-content h3 {
+    margin-top: 0;
+}
+
+.weight-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.buttons {
+    margin-top: 8px;
+    text-align: right;
 }
 </style>
