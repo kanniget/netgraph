@@ -18,6 +18,9 @@ let files = [];
 let selectedFile = '';
 let showWeights = false;
 let typeWeights = [];
+let showAttract = false;
+let typeAttract = [];
+let attractMap = {};
 let simulation;
 let selectedNodes = [];
 let pathLinks = [];
@@ -51,6 +54,17 @@ function openWeightsDialog(){
     showWeights = true;
 }
 
+function openAttractDialog(){
+    const map = {};
+    graph.nodes.forEach(n => {
+        if(!map[n.type]){
+            map[n.type] = {type: n.type, strength: attractMap[n.type] || -300};
+        }
+    });
+    typeAttract = Object.values(map);
+    showAttract = true;
+}
+
 onMount(async () => {
     const fRes = await fetch('/api/files');
     files = await fRes.json();
@@ -65,6 +79,9 @@ async function loadGraph(){
     graph = await res.json();
     graph.links.forEach(l => {
         if (l.weight === undefined) l.weight = 1;
+    });
+    graph.nodes.forEach(n => {
+        if(attractMap[n.type] === undefined) attractMap[n.type] = -300;
     });
     locatedNodeId = '';
     highlightedNode = null;
@@ -90,7 +107,7 @@ function draw(){
 
     simulation = d3.forceSimulation(graph.nodes)
         .force('link', d3.forceLink(graph.links).id(d => d.id).distance(l => 200 / (l.weight || 1)))
-        .force('charge', d3.forceManyBody().strength(-300))
+        .force('charge', d3.forceManyBody().strength(d => attractMap[d.type] || -300))
         .force('center', d3.forceCenter(width/2, height/2));
 
     linkSelection = container.append('g')
@@ -229,6 +246,15 @@ function applyWeights() {
     simulation.alpha(1).restart();
     showWeights = false;
 }
+
+function applyAttract() {
+    typeAttract.forEach(ta => {
+        attractMap[ta.type] = ta.strength;
+    });
+    simulation.force('charge').strength(d => attractMap[d.type] || -300);
+    simulation.alpha(1).restart();
+    showAttract = false;
+}
 </script>
 
 <main>
@@ -239,6 +265,7 @@ function applyWeights() {
             {/each}
         </select>
         <button on:click={openWeightsDialog} style="margin-left:4px;">Weights</button>
+        <button on:click={openAttractDialog} style="margin-left:4px;">Attractiveness</button>
         <input type="color" bind:value={pathColor} on:input={updateHighlights} style="margin-left:4px;" title="Path color"/>
         <select bind:value={locatedNodeId} on:change={highlightFromList} style="margin-left:4px;">
             <option value="">Find node...</option>
@@ -260,6 +287,23 @@ function applyWeights() {
             <div class="buttons">
                 <button on:click={applyWeights}>Apply</button>
                 <button on:click={() => showWeights = false}>Close</button>
+            </div>
+        </div>
+    </div>
+    {/if}
+    {#if showAttract}
+    <div class="dialog">
+        <div class="dialog-content">
+            <h3>Node Attractiveness</h3>
+            {#each typeAttract as ta}
+            <div class="weight-row">
+                <span>{ta.type}</span>
+                <input type="number" step="10" bind:value={ta.strength}>
+            </div>
+            {/each}
+            <div class="buttons">
+                <button on:click={applyAttract}>Apply</button>
+                <button on:click={() => showAttract = false}>Close</button>
             </div>
         </div>
     </div>
