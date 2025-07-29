@@ -10,11 +10,11 @@ RUN npm run build
 
 # Stage 2: build backend
 FROM golang:1.24.3 AS backend-builder
-WORKDIR /app
-COPY server/go.mod server/go.sum ./server/
-RUN cd server && go mod download
-COPY server ./server
-RUN CGO_ENABLED=0 go build -o netgraph ./server
+WORKDIR /app/server
+COPY server/go.mod server/go.sum ./
+RUN go mod download
+COPY server .
+RUN CGO_ENABLED=0 go build -o /app/netgraph
 
 # Final stage
 FROM alpine
