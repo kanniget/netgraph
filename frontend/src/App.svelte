@@ -11,8 +11,9 @@ onMount(async () => {
 
 function draw(){
     const svg = d3.select('#graph');
-    const width = +svg.attr('width');
-    const height = +svg.attr('height');
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    svg.attr('width', width).attr('height', height);
 
     const simulation = d3.forceSimulation(graph.nodes)
         .force('link', d3.forceLink(graph.links).id(d => d.id).distance(100))
@@ -69,10 +70,16 @@ function draw(){
 </script>
 
 <main>
-    <svg id="graph" width="600" height="400"></svg>
+    <svg id="graph" style="width:100%; height:100%;"></svg>
 </main>
 
 <style>
+main,
+svg {
+    width: 100%;
+    height: 100%;
+}
+
 svg {
     border: 1px solid #ccc;
 }
