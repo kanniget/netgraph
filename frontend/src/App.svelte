@@ -17,7 +17,30 @@ let graph = {nodes:[], links:[]};
 let files = [];
 let selectedFile = '';
 let showWeights = false;
+let typeWeights = [];
 let simulation;
+
+function nodeType(nodeRef){
+    if(typeof nodeRef === 'object' && nodeRef !== null){
+        return nodeRef.type;
+    }
+    const found = graph.nodes.find(n => n.id === nodeRef);
+    return found ? found.type : '';
+}
+
+function openWeightsDialog(){
+    const map = {};
+    graph.links.forEach(l => {
+        const sType = nodeType(l.source);
+        const tType = nodeType(l.target);
+        const key = sType + '-' + tType;
+        if(!map[key]){
+            map[key] = {sourceType: sType, targetType: tType, weight: l.weight || 1};
+        }
+    });
+    typeWeights = Object.values(map);
+    showWeights = true;
+}
 
 onMount(async () => {
     const fRes = await fetch('/api/files');
@@ -121,6 +144,14 @@ function draw(){
 }
 
 function applyWeights() {
+    graph.links.forEach(l => {
+        const sType = nodeType(l.source);
+        const tType = nodeType(l.target);
+        const match = typeWeights.find(tw => tw.sourceType === sType && tw.targetType === tType);
+        if(match){
+            l.weight = match.weight;
+        }
+    });
     simulation.force('link').distance(l => 200 / (l.weight || 1));
     simulation.alpha(1).restart();
     showWeights = false;
@@ -134,16 +165,16 @@ function applyWeights() {
                 <option value={f}>{f}</option>
             {/each}
         </select>
-        <button on:click={() => showWeights = true} style="margin-left:4px;">Weights</button>
+        <button on:click={openWeightsDialog} style="margin-left:4px;">Weights</button>
     </div>
     {#if showWeights}
     <div class="dialog">
         <div class="dialog-content">
             <h3>Link Weights</h3>
-            {#each graph.links as l}
+            {#each typeWeights as tw}
             <div class="weight-row">
-                <span>{l.source.id || l.source} - {l.target.id || l.target}</span>
-                <input type="number" min="0.1" step="0.1" bind:value={l.weight}>
+                <span>{tw.sourceType} - {tw.targetType}</span>
+                <input type="number" min="0.1" step="0.1" bind:value={tw.weight}>
             </div>
             {/each}
             <div class="buttons">
