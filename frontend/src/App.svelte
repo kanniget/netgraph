@@ -10,12 +10,21 @@ const icons = {
 };
 
 let graph = {nodes:[], links:[]};
+let files = [];
+let selectedFile = '';
 
 onMount(async () => {
-    const res = await fetch('/api/graph');
+    const fRes = await fetch('/api/files');
+    files = await fRes.json();
+    selectedFile = files[0] || 'graph.json';
+    await loadGraph();
+});
+
+async function loadGraph(){
+    const res = await fetch(`/api/graph?file=${selectedFile}`);
     graph = await res.json();
     draw();
-});
+}
 
 function draw(){
     const svg = d3.select('#graph');
@@ -86,6 +95,13 @@ function draw(){
 </script>
 
 <main>
+    <div style="position:absolute;top:10px;left:10px;z-index:10;background:white;padding:4px;border-radius:4px;">
+        <select bind:value={selectedFile} on:change={loadGraph}>
+            {#each files as f}
+                <option value={f}>{f}</option>
+            {/each}
+        </select>
+    </div>
     <svg id="graph" style="width:100%; height:100%;"></svg>
 </main>
 
@@ -94,6 +110,10 @@ main,
 svg {
     width: 100%;
     height: 100%;
+}
+
+main {
+    position: relative;
 }
 
 svg {

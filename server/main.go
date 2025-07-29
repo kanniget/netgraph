@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/gorilla/mux"
 )
@@ -29,6 +30,7 @@ func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/api/graph", graphHandler).Methods("GET")
+	r.HandleFunc("/api/files", filesHandler).Methods("GET")
 
 	// Serve static files from frontend/public
 	fs := http.FileServer(http.Dir("frontend/public"))
@@ -39,7 +41,12 @@ func main() {
 }
 
 func graphHandler(w http.ResponseWriter, r *http.Request) {
-	f, err := os.Open("data/graph.json")
+	file := r.URL.Query().Get("file")
+	if file == "" {
+		file = "graph.json"
+	}
+	file = filepath.Base(file)
+	f, err := os.Open(filepath.Join("data", file))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -54,4 +61,20 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(g)
+}
+
+func filesHandler(w http.ResponseWriter, r *http.Request) {
+	entries, err := os.ReadDir("data")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
+			files = append(files, e.Name())
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(files)
 }
