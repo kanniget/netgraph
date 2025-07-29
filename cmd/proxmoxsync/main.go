@@ -238,8 +238,11 @@ func getZones(client *http.Client, host, ticket string) ([]string, error) {
 	}
 	var zones []string
 	for _, d := range lr.Data {
-		if d.ID != "" {
+		switch {
+		case d.ID != "":
 			zones = append(zones, d.ID)
+		case d.Zone != "":
+			zones = append(zones, d.Zone)
 		}
 	}
 	return zones, nil
