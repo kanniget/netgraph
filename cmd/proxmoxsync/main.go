@@ -70,6 +70,7 @@ func main() {
 	}
 
 	graph := Graph{}
+	nodeSeen := make(map[string]struct{})
 
 	networks, err := getNetworks(client, *host, ticket)
 	if err != nil {
@@ -77,7 +78,10 @@ func main() {
 	}
 
 	for _, n := range networks {
-		graph.Nodes = append(graph.Nodes, Node{ID: n, Type: "net", Name: n})
+		if _, ok := nodeSeen[n]; !ok {
+			graph.Nodes = append(graph.Nodes, Node{ID: n, Type: "net", Name: n})
+			nodeSeen[n] = struct{}{}
+		}
 	}
 
 	vms, err := getVMs(client, *host, ticket)
@@ -86,7 +90,10 @@ func main() {
 	}
 
 	for _, v := range vms {
-		graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "host", Name: v.Name})
+		if _, ok := nodeSeen[v.Name]; !ok {
+			graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "host", Name: v.Name})
+			nodeSeen[v.Name] = struct{}{}
+		}
 	}
 
 	for _, v := range vms {
@@ -96,6 +103,10 @@ func main() {
 			continue
 		}
 		for _, iface := range ifaces {
+			if _, ok := nodeSeen[iface]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "net", Name: iface})
+				nodeSeen[iface] = struct{}{}
+			}
 			graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
 		}
 	}
