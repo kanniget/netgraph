@@ -2,11 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,7 +38,9 @@ func main() {
 	host := flag.String("host", "", "Proxmox host (e.g. https://pve:8006)")
 	user := flag.String("user", "root@pam", "API user")
 	pass := flag.String("pass", "", "API password")
-	out := flag.String("out", filepath.Join("data", "graph.json"), "output graph json")
+	out := flag.String("out", filepath.Join("data", "graph.json"), "output graph json (deprecated)")
+	outfile := flag.String("file", "", "output graph json file")
+	insecure := flag.Bool("insecure", false, "ignore TLS certificate errors")
 	flag.Parse()
 
 	if *host == "" || *pass == "" {
@@ -46,7 +48,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := &http.Client{}
+	var client *http.Client
+	if *insecure {
+		tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+		client = &http.Client{Transport: tr}
+	} else {
+		client = &http.Client{}
+	}
 
 	ticket, err := login(client, *host, *user, *pass)
 	if err != nil {
@@ -90,7 +98,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := ioutil.WriteFile(*out, b, 0644); err != nil {
+	path := *out
+	if *outfile != "" {
+		path = *outfile
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
