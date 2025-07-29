@@ -1,0 +1,206 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"path/filepath"
+)
+
+type Graph struct {
+	Nodes []Node `json:"nodes"`
+	Links []Link `json:"links"`
+}
+
+type Node struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+type Link struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+type ticketResponse struct {
+	Data struct {
+		Ticket string `json:"ticket"`
+	} `json:"data"`
+}
+
+func main() {
+	host := flag.String("host", "", "Proxmox host (e.g. https://pve:8006)")
+	user := flag.String("user", "root@pam", "API user")
+	pass := flag.String("pass", "", "API password")
+	out := flag.String("out", filepath.Join("data", "graph.json"), "output graph json")
+	flag.Parse()
+
+	if *host == "" || *pass == "" {
+		fmt.Fprintln(os.Stderr, "host and pass are required")
+		os.Exit(1)
+	}
+
+	client := &http.Client{}
+
+	ticket, err := login(client, *host, *user, *pass)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "login error:", err)
+		os.Exit(1)
+	}
+
+	graph := Graph{}
+
+	networks, err := getNetworks(client, *host, ticket)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "get networks error:", err)
+	}
+
+	for _, n := range networks {
+		graph.Nodes = append(graph.Nodes, Node{ID: n, Type: "net", Name: n})
+	}
+
+	hosts, err := getHosts(client, *host, ticket)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "get hosts error:", err)
+	}
+
+	for _, h := range hosts {
+		graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h})
+	}
+
+	for _, h := range hosts {
+		ifaces, err := getHostIfaces(client, *host, ticket, h)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "get interfaces error:", err)
+			continue
+		}
+		for _, iface := range ifaces {
+			graph.Links = append(graph.Links, Link{Source: iface, Target: h})
+		}
+	}
+
+	b, err := json.MarshalIndent(graph, "", "  ")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := ioutil.WriteFile(*out, b, 0644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func login(client *http.Client, host, user, pass string) (string, error) {
+	data := fmt.Sprintf("username=%s&password=%s", user, pass)
+	req, err := http.NewRequest("POST", host+"/api2/json/access/ticket", bytes.NewBufferString(data))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+
+	var t ticketResponse
+	if err := json.Unmarshal(body, &t); err != nil {
+		return "", err
+	}
+	return t.Data.Ticket, nil
+}
+
+type listResponse struct {
+	Data []struct {
+		ID    string `json:"id"`
+		Node  string `json:"node"`
+		Iface string `json:"iface"`
+	} `json:"data"`
+}
+
+func getNetworks(client *http.Client, host, ticket string) ([]string, error) {
+	req, _ := http.NewRequest("GET", host+"/api2/json/cluster/sdn/vnets", nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var lr listResponse
+	if err := json.Unmarshal(body, &lr); err != nil {
+		return nil, err
+	}
+	var nets []string
+	for _, d := range lr.Data {
+		if d.ID != "" {
+			nets = append(nets, d.ID)
+		}
+	}
+	return nets, nil
+}
+
+func getHosts(client *http.Client, host, ticket string) ([]string, error) {
+	req, _ := http.NewRequest("GET", host+"/api2/json/nodes", nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var lr listResponse
+	if err := json.Unmarshal(body, &lr); err != nil {
+		return nil, err
+	}
+	var hosts []string
+	for _, d := range lr.Data {
+		if d.Node != "" {
+			hosts = append(hosts, d.Node)
+		}
+	}
+	return hosts, nil
+}
+
+func getHostIfaces(client *http.Client, host, ticket, node string) ([]string, error) {
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api2/json/nodes/%s/network", host, node), nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var lr listResponse
+	if err := json.Unmarshal(body, &lr); err != nil {
+		return nil, err
+	}
+	var ifaces []string
+	for _, d := range lr.Data {
+		if d.Iface != "" {
+			ifaces = append(ifaces, d.Iface)
+		}
+	}
+	return ifaces, nil
+}
