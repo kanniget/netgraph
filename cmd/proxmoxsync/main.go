@@ -151,11 +151,17 @@ func main() {
 		}
 		logf("host %s has %d interfaces", h, len(ifaces))
 		for _, iface := range ifaces {
-			if _, ok := nodeSeen[iface]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
-				nodeSeen[iface] = struct{}{}
+			nodeType := iface.Kind
+			if nodeType == "bridge" || nodeType == "OVSBridge" {
+				nodeType = "bridge"
+			} else {
+				nodeType = "nic"
 			}
-			graph.Links = append(graph.Links, Link{Source: iface, Target: h})
+			if _, ok := nodeSeen[iface.Name]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: iface.Name, Type: nodeType, Name: iface.Name})
+				nodeSeen[iface.Name] = struct{}{}
+			}
+			graph.Links = append(graph.Links, Link{Source: iface.Name, Target: h})
 		}
 	}
 
@@ -242,6 +248,11 @@ type listResponse struct {
 		VNet   string `json:"vnet"`
 		Type   string `json:"type"`
 	} `json:"data"`
+}
+
+type ifaceInfo struct {
+	Name string
+	Kind string
 }
 
 type networkInfo struct {
@@ -332,7 +343,7 @@ func getHosts(client *http.Client, host, ticket string) ([]string, error) {
 	return hosts, nil
 }
 
-func getHostIfaces(client *http.Client, host, ticket, node string) ([]string, error) {
+func getHostIfaces(client *http.Client, host, ticket, node string) ([]ifaceInfo, error) {
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api2/json/nodes/%s/network", host, node), nil)
 	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
 	resp, err := client.Do(req)
@@ -348,10 +359,14 @@ func getHostIfaces(client *http.Client, host, ticket, node string) ([]string, er
 	if err := json.Unmarshal(body, &lr); err != nil {
 		return nil, err
 	}
-	var ifaces []string
+	var ifaces []ifaceInfo
 	for _, d := range lr.Data {
 		if d.Iface != "" {
-			ifaces = append(ifaces, d.Iface)
+			kind := d.Type
+			if kind == "" {
+				kind = "nic"
+			}
+			ifaces = append(ifaces, ifaceInfo{Name: d.Iface, Kind: kind})
 		}
 	}
 	return ifaces, nil
