@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    {"id": "A", "type": "net", "name": "Network"},
+    {"id": "B", "type": "host", "name": "Host"},
+    {"id": "C", "type": "rtr", "name": "Router"},
+    {"id": "D", "type": "fw", "name": "Firewall"}
+  ],
+  "links": [
+    {"source": "A", "target": "B"},
+    {"source": "A", "target": "C"},
+    {"source": "B", "target": "D"},
+    {"source": "C", "target": "D"}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    {"id": "X", "type": "net", "name": "Net2"},
+    {"id": "Y", "type": "host", "name": "Host2"},
+    {"id": "Z", "type": "rtr", "name": "Router2"}
+  ],
+  "links": [
+    {"source": "X", "target": "Y"},
+    {"source": "Y", "target": "Z"}
+  ]
+}

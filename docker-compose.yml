@@ -1,0 +1,8 @@
+version: "3"
+services:
+  netgraph:
+    build: .
+    ports:
+      - "9080:8080"
+    volumes:
+      - ./data:/app/data
