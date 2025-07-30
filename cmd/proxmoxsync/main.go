@@ -27,9 +27,10 @@ type Graph struct {
 }
 
 type Node struct {
-	ID   string `json:"id"`
-	Type string `json:"type"`
-	Name string `json:"name"`
+	ID   string            `json:"id"`
+	Type string            `json:"type"`
+	Name string            `json:"name"`
+	Info map[string]string `json:"info,omitempty"`
 }
 
 type Link struct {
@@ -125,7 +126,14 @@ func main() {
 
 		for _, n := range networks {
 			if _, ok := nodeSeen[n.ID]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: n.ID, Type: "net", Name: n.ID})
+				info := map[string]string{}
+				if n.Zone != "" {
+					info["zone"] = n.Zone
+				}
+				if n.Bridge != "" {
+					info["bridge"] = n.Bridge
+				}
+				graph.Nodes = append(graph.Nodes, Node{ID: n.ID, Type: "net", Name: n.ID, Info: info})
 				nodeSeen[n.ID] = struct{}{}
 			}
 			if n.Zone != "" && !ignore["zone"] {
@@ -155,7 +163,8 @@ func main() {
 
 		for _, h := range hosts {
 			if _, ok := nodeSeen[h]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h})
+				info, _ := getHostStatus(client, *host, ticket, h)
+				graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h, Info: info})
 				nodeSeen[h] = struct{}{}
 			}
 
@@ -177,7 +186,8 @@ func main() {
 					continue
 				}
 				if _, ok := nodeSeen[iface.Name]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: iface.Name, Type: nodeType, Name: iface.Name})
+					info := map[string]string{"kind": iface.Kind}
+					graph.Nodes = append(graph.Nodes, Node{ID: iface.Name, Type: nodeType, Name: iface.Name, Info: info})
 					nodeSeen[iface.Name] = struct{}{}
 				}
 				graph.Links = append(graph.Links, Link{Source: iface.Name, Target: h})
@@ -194,20 +204,15 @@ func main() {
 		logf("retrieved %d VMs", len(vms))
 
 		for _, v := range vms {
-			if _, ok := nodeSeen[v.Name]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name})
-				nodeSeen[v.Name] = struct{}{}
-			}
-		}
-
-		for _, v := range vms {
-			logf("retrieving interfaces for VM %s", v.Name)
-			ifaces, err := getVMIfaces(client, *host, ticket, v)
+			info, ifaces, disks, err := getVMDetails(client, *host, ticket, v)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "get vm interfaces error:", err)
+				fmt.Fprintln(os.Stderr, "get vm details error:", err)
 				continue
 			}
-			logf("VM %s has %d interfaces", v.Name, len(ifaces))
+			if _, ok := nodeSeen[v.Name]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name, Info: info})
+				nodeSeen[v.Name] = struct{}{}
+			}
 			for _, iface := range ifaces {
 				if ignore["bridge"] {
 					continue
@@ -218,14 +223,6 @@ func main() {
 				}
 				graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
 			}
-
-			logf("retrieving disks for VM %s", v.Name)
-			disks, err := getVMDisks(client, *host, ticket, v)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "get vm disks error:", err)
-				continue
-			}
-			logf("VM %s has %d disks", v.Name, len(disks))
 			for _, disk := range disks {
 				if ignore["disk"] {
 					continue
@@ -525,4 +522,121 @@ func getVMDisks(client *http.Client, host, ticket string, vm vmInfo) ([]string, 
 		}
 	}
 	return disks, nil
+}
+
+func getHostStatus(client *http.Client, host, ticket, node string) (map[string]string, error) {
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api2/json/nodes/%s/status", host, node), nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var lr struct {
+		Data struct {
+			CPU    float64 `json:"cpu"`
+			Mem    int64   `json:"mem"`
+			MaxMem int64   `json:"maxmem"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &lr); err != nil {
+		return nil, err
+	}
+	info := map[string]string{
+		"cpu": fmt.Sprintf("%.2f%%", lr.Data.CPU*100),
+		"mem": fmt.Sprintf("%d/%d MB", lr.Data.Mem/1024/1024, lr.Data.MaxMem/1024/1024),
+	}
+	return info, nil
+}
+
+func getVMDetails(client *http.Client, host, ticket string, vm vmInfo) (map[string]string, []string, []string, error) {
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api2/json/nodes/%s/qemu/%s/config", host, vm.Node, vm.VMID), nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil, nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var cfg struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(body, &cfg); err != nil {
+		return nil, nil, nil, err
+	}
+	info := make(map[string]string)
+	var ifaces []string
+	var disks []string
+	for k, v := range cfg.Data {
+		switch {
+		case k == "memory":
+			switch vv := v.(type) {
+			case json.Number:
+				info["memory"] = vv.String()
+			case float64:
+				info["memory"] = fmt.Sprintf("%d", int64(vv))
+			}
+		case k == "cores":
+			switch vv := v.(type) {
+			case json.Number:
+				info["cores"] = vv.String()
+			case float64:
+				info["cores"] = fmt.Sprintf("%d", int64(vv))
+			}
+		case strings.HasPrefix(k, "net"):
+			if val, ok := v.(string); ok {
+				parts := strings.Split(val, ",")
+				for _, p := range parts {
+					if strings.HasPrefix(p, "bridge=") {
+						b := strings.TrimPrefix(p, "bridge=")
+						if b != "" {
+							ifaces = append(ifaces, b)
+						}
+					}
+				}
+			}
+		case k == "scsihw":
+			continue
+		case strings.HasPrefix(k, "scsi"), strings.HasPrefix(k, "sata"), strings.HasPrefix(k, "ide"), strings.HasPrefix(k, "virtio"):
+			if val, ok := v.(string); ok {
+				if strings.Contains(val, "media=cdrom") {
+					continue
+				}
+				parts := strings.Split(val, ",")
+				if len(parts) > 0 {
+					disk := strings.TrimSpace(parts[0])
+					if disk != "" {
+						disks = append(disks, disk)
+					}
+				}
+			}
+		}
+	}
+
+	req, _ = http.NewRequest("GET", fmt.Sprintf("%s/api2/json/nodes/%s/qemu/%s/status/current", host, vm.Node, vm.VMID), nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err = client.Do(req)
+	if err == nil {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusOK {
+			var st struct {
+				Data struct {
+					Status string `json:"status"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(body, &st); err == nil {
+				info["status"] = st.Data.Status
+			}
+		}
+	}
+
+	return info, ifaces, disks, nil
 }
