@@ -159,6 +159,11 @@ function draw(){
         .attr('x', d => (d.type === 'net' || d.type === 'zone') ? -48 : -12)
         .attr('y', d => (d.type === 'net' || d.type === 'zone') ? -48 : -12);
 
+    nodeSelection.append('circle')
+        .attr('r', d => (d.type === 'net' || d.type === 'zone') ? 48 : 12)
+        .attr('fill', 'none')
+        .attr('pointer-events', 'none');
+
     nodeSelection.append('text')
         .attr('y', 20)
         .attr('text-anchor', 'middle')
@@ -234,7 +239,7 @@ function findPath(startId, endId){
 }
 
 function updateHighlights(){
-    nodeSelection.select('image')
+    nodeSelection.select('circle')
         .classed('selected', d => selectedNodes.includes(d))
         .classed('located', d => highlightedNode && d.id === highlightedNode.id);
     linkSelection
@@ -405,12 +410,12 @@ svg {
     text-align: right;
 }
 
-image.selected {
+circle.selected {
     stroke: red;
     stroke-width: 2px;
 }
 
-image.located {
+circle.located {
     stroke: blue;
     stroke-width: 2px;
 }
