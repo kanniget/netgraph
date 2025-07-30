@@ -57,12 +57,23 @@ func main() {
 	outfile := flag.String("file", "", "output graph json file")
 	insecure := flag.Bool("insecure", false, "ignore TLS certificate errors")
 	verboseFlag := flag.Bool("verbose", false, "enable verbose output")
+	ignoreTypesFlag := flag.String("ignore", "", "comma-separated node types to ignore")
+	flag.StringVar(ignoreTypesFlag, "i", "", "comma-separated node types to ignore (shorthand)")
 	flag.BoolVar(verboseFlag, "v", false, "enable verbose output (shorthand)")
 	flag.Parse()
 
 	verbose = *verboseFlag
 	if verbose {
 		fmt.Println("verbose output enabled")
+	}
+	ignore := make(map[string]bool)
+	if *ignoreTypesFlag != "" {
+		for _, t := range strings.Split(*ignoreTypesFlag, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				ignore[strings.ToLower(t)] = true
+			}
+		}
 	}
 
 	if *host == "" || *pass == "" {
@@ -88,111 +99,125 @@ func main() {
 	graph := Graph{}
 	nodeSeen := make(map[string]struct{})
 
-	logf("retrieving zones")
-	zones, err := getZones(client, *host, ticket)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "get zones error:", err)
-	}
-	logf("retrieved %d zones", len(zones))
-
-	for _, z := range zones {
-		if _, ok := nodeSeen[z]; !ok {
-			graph.Nodes = append(graph.Nodes, Node{ID: z, Type: "zone", Name: z})
-			nodeSeen[z] = struct{}{}
-		}
-	}
-
-	logf("retrieving networks")
-	networks, err := getNetworks(client, *host, ticket)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "get networks error:", err)
-	}
-	logf("retrieved %d networks", len(networks))
-
-	for _, n := range networks {
-		if _, ok := nodeSeen[n.ID]; !ok {
-			graph.Nodes = append(graph.Nodes, Node{ID: n.ID, Type: "net", Name: n.ID})
-			nodeSeen[n.ID] = struct{}{}
-		}
-		if n.Zone != "" {
-			if _, ok := nodeSeen[n.Zone]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: n.Zone, Type: "zone", Name: n.Zone})
-				nodeSeen[n.Zone] = struct{}{}
-			}
-			graph.Links = append(graph.Links, Link{Source: n.ID, Target: n.Zone})
-		}
-		if n.Bridge != "" {
-			if _, ok := nodeSeen[n.Bridge]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: n.Bridge, Type: "bridge", Name: n.Bridge})
-				nodeSeen[n.Bridge] = struct{}{}
-			}
-			graph.Links = append(graph.Links, Link{Source: n.ID, Target: n.Bridge})
-		}
-	}
-
-	logf("retrieving hosts")
-	hosts, err := getHosts(client, *host, ticket)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "get hosts error:", err)
-	}
-	logf("retrieved %d hosts", len(hosts))
-
-	for _, h := range hosts {
-		if _, ok := nodeSeen[h]; !ok {
-			graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h})
-			nodeSeen[h] = struct{}{}
-		}
-
-		logf("retrieving interfaces for host %s", h)
-		ifaces, err := getHostIfaces(client, *host, ticket, h)
+	if !ignore["zone"] {
+		logf("retrieving zones")
+		zones, err := getZones(client, *host, ticket)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "get host interfaces error:", err)
-			continue
+			fmt.Fprintln(os.Stderr, "get zones error:", err)
 		}
-		logf("host %s has %d interfaces", h, len(ifaces))
-		for _, iface := range ifaces {
-			nodeType := iface.Kind
-			if nodeType == "bridge" || nodeType == "OVSBridge" {
-				nodeType = "bridge"
-			} else {
-				nodeType = "nic"
+		logf("retrieved %d zones", len(zones))
+
+		for _, z := range zones {
+			if _, ok := nodeSeen[z]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: z, Type: "zone", Name: z})
+				nodeSeen[z] = struct{}{}
 			}
-			if _, ok := nodeSeen[iface.Name]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: iface.Name, Type: nodeType, Name: iface.Name})
-				nodeSeen[iface.Name] = struct{}{}
-			}
-			graph.Links = append(graph.Links, Link{Source: iface.Name, Target: h})
 		}
 	}
 
-	logf("retrieving VMs")
-	vms, err := getVMs(client, *host, ticket)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "get vms error:", err)
-	}
-	logf("retrieved %d VMs", len(vms))
-
-	for _, v := range vms {
-		if _, ok := nodeSeen[v.Name]; !ok {
-			graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name})
-			nodeSeen[v.Name] = struct{}{}
-		}
-	}
-
-	for _, v := range vms {
-		logf("retrieving interfaces for VM %s", v.Name)
-		ifaces, err := getVMIfaces(client, *host, ticket, v)
+	if !ignore["net"] {
+		logf("retrieving networks")
+		networks, err := getNetworks(client, *host, ticket)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "get vm interfaces error:", err)
-			continue
+			fmt.Fprintln(os.Stderr, "get networks error:", err)
 		}
-		logf("VM %s has %d interfaces", v.Name, len(ifaces))
-		for _, iface := range ifaces {
-			if _, ok := nodeSeen[iface]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
-				nodeSeen[iface] = struct{}{}
+		logf("retrieved %d networks", len(networks))
+
+		for _, n := range networks {
+			if _, ok := nodeSeen[n.ID]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: n.ID, Type: "net", Name: n.ID})
+				nodeSeen[n.ID] = struct{}{}
 			}
-			graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
+			if n.Zone != "" && !ignore["zone"] {
+				if _, ok := nodeSeen[n.Zone]; !ok {
+					graph.Nodes = append(graph.Nodes, Node{ID: n.Zone, Type: "zone", Name: n.Zone})
+					nodeSeen[n.Zone] = struct{}{}
+				}
+				graph.Links = append(graph.Links, Link{Source: n.ID, Target: n.Zone})
+			}
+			if n.Bridge != "" && !ignore["bridge"] {
+				if _, ok := nodeSeen[n.Bridge]; !ok {
+					graph.Nodes = append(graph.Nodes, Node{ID: n.Bridge, Type: "bridge", Name: n.Bridge})
+					nodeSeen[n.Bridge] = struct{}{}
+				}
+				graph.Links = append(graph.Links, Link{Source: n.ID, Target: n.Bridge})
+			}
+		}
+	}
+
+	if !ignore["host"] {
+		logf("retrieving hosts")
+		hosts, err := getHosts(client, *host, ticket)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "get hosts error:", err)
+		}
+		logf("retrieved %d hosts", len(hosts))
+
+		for _, h := range hosts {
+			if _, ok := nodeSeen[h]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h})
+				nodeSeen[h] = struct{}{}
+			}
+
+			logf("retrieving interfaces for host %s", h)
+			ifaces, err := getHostIfaces(client, *host, ticket, h)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "get host interfaces error:", err)
+				continue
+			}
+			logf("host %s has %d interfaces", h, len(ifaces))
+			for _, iface := range ifaces {
+				nodeType := iface.Kind
+				if nodeType == "bridge" || nodeType == "OVSBridge" {
+					nodeType = "bridge"
+				} else {
+					nodeType = "nic"
+				}
+				if ignore[nodeType] {
+					continue
+				}
+				if _, ok := nodeSeen[iface.Name]; !ok {
+					graph.Nodes = append(graph.Nodes, Node{ID: iface.Name, Type: nodeType, Name: iface.Name})
+					nodeSeen[iface.Name] = struct{}{}
+				}
+				graph.Links = append(graph.Links, Link{Source: iface.Name, Target: h})
+			}
+		}
+	}
+
+	if !ignore["vm"] {
+		logf("retrieving VMs")
+		vms, err := getVMs(client, *host, ticket)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "get vms error:", err)
+		}
+		logf("retrieved %d VMs", len(vms))
+
+		for _, v := range vms {
+			if _, ok := nodeSeen[v.Name]; !ok {
+				graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name})
+				nodeSeen[v.Name] = struct{}{}
+			}
+		}
+
+		for _, v := range vms {
+			logf("retrieving interfaces for VM %s", v.Name)
+			ifaces, err := getVMIfaces(client, *host, ticket, v)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "get vm interfaces error:", err)
+				continue
+			}
+			logf("VM %s has %d interfaces", v.Name, len(ifaces))
+			for _, iface := range ifaces {
+				if ignore["bridge"] {
+					continue
+				}
+				if _, ok := nodeSeen[iface]; !ok {
+					graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
+					nodeSeen[iface] = struct{}{}
+				}
+				graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
+			}
 		}
 	}
 
