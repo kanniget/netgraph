@@ -104,6 +104,8 @@ async function loadGraph(){
 
 function draw(){
     const svg = d3.select('#graph');
+    svg.selectAll('*').remove();
+    if (simulation) simulation.stop();
     const width = window.innerWidth;
     const height = window.innerHeight;
     svg.attr('width', width).attr('height', height);
