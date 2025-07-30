@@ -31,6 +31,9 @@ let adjacency = new Map();
 let linkMap = new Map();
 let locatedNodeId = '';
 let highlightedNode = null;
+let showHide = false;
+let typeHide = [];
+let hiddenTypes = new Set();
 
 function nodeType(nodeRef){
     if(typeof nodeRef === 'object' && nodeRef !== null){
@@ -65,6 +68,17 @@ function openAttractDialog(){
     showAttract = true;
 }
 
+function openHideDialog(){
+    const map = {};
+    graph.nodes.forEach(n => {
+        if(!map[n.type]){
+            map[n.type] = {type: n.type, visible: !hiddenTypes.has(n.type)};
+        }
+    });
+    typeHide = Object.values(map);
+    showHide = true;
+}
+
 onMount(async () => {
     const fRes = await fetch('/api/files');
     files = await fRes.json();
@@ -85,7 +99,6 @@ async function loadGraph(){
     });
     locatedNodeId = '';
     highlightedNode = null;
-    buildMaps();
     draw();
 }
 
@@ -105,8 +118,18 @@ function draw(){
 
     svg.call(zoom);
 
-    simulation = d3.forceSimulation(graph.nodes)
-        .force('link', d3.forceLink(graph.links).id(d => d.id).distance(l => 200 / (l.weight || 1)))
+    const nodes = graph.nodes.filter(n => !hiddenTypes.has(n.type));
+    const nodeIds = new Set(nodes.map(n => n.id));
+    const links = graph.links.filter(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        return nodeIds.has(s) && nodeIds.has(t);
+    });
+
+    buildMaps(nodes, links);
+
+    simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(l => 200 / (l.weight || 1)))
         .force('charge', d3.forceManyBody().strength(d => attractMap[d.type] || -300))
         .force('center', d3.forceCenter(width/2, height/2));
 
@@ -114,12 +137,12 @@ function draw(){
         .attr('stroke', '#999')
         .attr('stroke-width', 1)
         .selectAll('line')
-        .data(graph.links)
+        .data(links)
         .enter().append('line');
 
     nodeSelection = container.append('g')
         .selectAll('g')
-        .data(graph.nodes)
+        .data(nodes)
         .enter().append('g')
         .call(d3.drag()
             .on('start', dragstarted)
@@ -174,10 +197,10 @@ function dragended(event) {
     }
 }
 
-function buildMaps(){
+function buildMaps(nodesList = graph.nodes, linksList = graph.links){
     adjacency = new Map();
     linkMap = new Map();
-    graph.links.forEach(l => {
+    linksList.forEach(l => {
         const s = typeof l.source === 'object' ? l.source.id : l.source;
         const t = typeof l.target === 'object' ? l.target.id : l.target;
         if(!adjacency.has(s)) adjacency.set(s, []);
@@ -258,6 +281,12 @@ function applyAttract() {
     simulation.alpha(1).restart();
     showAttract = false;
 }
+
+function applyHide() {
+    hiddenTypes = new Set(typeHide.filter(th => !th.visible).map(th => th.type));
+    draw();
+    showHide = false;
+}
 </script>
 
 <main>
@@ -269,10 +298,11 @@ function applyAttract() {
         </select>
         <button on:click={openWeightsDialog} style="margin-left:4px;">Weights</button>
         <button on:click={openAttractDialog} style="margin-left:4px;">Attractiveness</button>
+        <button on:click={openHideDialog} style="margin-left:4px;">Hide Types</button>
         <input type="color" bind:value={pathColor} on:input={updateHighlights} style="margin-left:4px;" title="Path color"/>
         <select bind:value={locatedNodeId} on:change={highlightFromList} style="margin-left:4px;">
             <option value="">Find node...</option>
-            {#each graph.nodes as n}
+            {#each graph.nodes.filter(n => !hiddenTypes.has(n.type)) as n}
                 <option value={n.id}>{n.name || n.id}</option>
             {/each}
         </select>
@@ -307,6 +337,23 @@ function applyAttract() {
             <div class="buttons">
                 <button on:click={applyAttract}>Apply</button>
                 <button on:click={() => showAttract = false}>Close</button>
+            </div>
+        </div>
+    </div>
+    {/if}
+    {#if showHide}
+    <div class="dialog">
+        <div class="dialog-content">
+            <h3>Hide Node Types</h3>
+            {#each typeHide as th}
+            <div class="weight-row">
+                <span>{th.type}</span>
+                <input type="checkbox" bind:checked={th.visible}>
+            </div>
+            {/each}
+            <div class="buttons">
+                <button on:click={applyHide}>Apply</button>
+                <button on:click={() => showHide = false}>Close</button>
             </div>
         </div>
     </div>
