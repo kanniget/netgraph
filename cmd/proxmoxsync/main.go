@@ -27,9 +27,10 @@ type Graph struct {
 }
 
 type Node struct {
-	ID   string `json:"id"`
-	Type string `json:"type"`
-	Name string `json:"name"`
+        ID   string                 `json:"id"`
+        Type string                 `json:"type"`
+        Name string                 `json:"name"`
+        Info map[string]interface{} `json:"info,omitempty"`
 }
 
 type Link struct {
@@ -44,9 +45,10 @@ type ticketResponse struct {
 }
 
 type vmInfo struct {
-	Node string
-	VMID string
-	Name string
+        Node string
+        VMID string
+        Name string
+        Info map[string]interface{}
 }
 
 func main() {
@@ -123,11 +125,18 @@ func main() {
 		}
 		logf("retrieved %d networks", len(networks))
 
-		for _, n := range networks {
-			if _, ok := nodeSeen[n.ID]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: n.ID, Type: "net", Name: n.ID})
-				nodeSeen[n.ID] = struct{}{}
-			}
+                for _, n := range networks {
+                        if _, ok := nodeSeen[n.ID]; !ok {
+                                info := map[string]interface{}{}
+                                if n.Zone != "" {
+                                        info["zone"] = n.Zone
+                                }
+                                if n.Bridge != "" {
+                                        info["bridge"] = n.Bridge
+                                }
+                                graph.Nodes = append(graph.Nodes, Node{ID: n.ID, Type: "net", Name: n.ID, Info: info})
+                                nodeSeen[n.ID] = struct{}{}
+                        }
 			if n.Zone != "" && !ignore["zone"] {
 				if _, ok := nodeSeen[n.Zone]; !ok {
 					graph.Nodes = append(graph.Nodes, Node{ID: n.Zone, Type: "zone", Name: n.Zone})
@@ -153,11 +162,15 @@ func main() {
 		}
 		logf("retrieved %d hosts", len(hosts))
 
-		for _, h := range hosts {
-			if _, ok := nodeSeen[h]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h})
-				nodeSeen[h] = struct{}{}
-			}
+                for _, h := range hosts {
+                        var info map[string]interface{}
+                        if status, err := getHostStatus(client, *host, ticket, h); err == nil {
+                                info = status
+                        }
+                        if _, ok := nodeSeen[h]; !ok {
+                                graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h, Info: info})
+                                nodeSeen[h] = struct{}{}
+                        }
 
 			logf("retrieving interfaces for host %s", h)
 			ifaces, err := getHostIfaces(client, *host, ticket, h)
@@ -176,10 +189,10 @@ func main() {
 				if ignore[nodeType] {
 					continue
 				}
-				if _, ok := nodeSeen[iface.Name]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: iface.Name, Type: nodeType, Name: iface.Name})
-					nodeSeen[iface.Name] = struct{}{}
-				}
+                                if _, ok := nodeSeen[iface.Name]; !ok {
+                                        graph.Nodes = append(graph.Nodes, Node{ID: iface.Name, Type: nodeType, Name: iface.Name, Info: map[string]interface{}{"kind": iface.Kind}})
+                                        nodeSeen[iface.Name] = struct{}{}
+                                }
 				graph.Links = append(graph.Links, Link{Source: iface.Name, Target: h})
 			}
 		}
@@ -193,11 +206,11 @@ func main() {
 		}
 		logf("retrieved %d VMs", len(vms))
 
-		for _, v := range vms {
-			if _, ok := nodeSeen[v.Name]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name})
-				nodeSeen[v.Name] = struct{}{}
-			}
+                for _, v := range vms {
+                        if _, ok := nodeSeen[v.Name]; !ok {
+                                graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name, Info: v.Info})
+                                nodeSeen[v.Name] = struct{}{}
+                        }
 		}
 
 		for _, v := range vms {
@@ -212,10 +225,10 @@ func main() {
 				if ignore["bridge"] {
 					continue
 				}
-				if _, ok := nodeSeen[iface]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
-					nodeSeen[iface] = struct{}{}
-				}
+                                if _, ok := nodeSeen[iface]; !ok {
+                                        graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
+                                        nodeSeen[iface] = struct{}{}
+                                }
 				graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
 			}
 
@@ -230,10 +243,10 @@ func main() {
 				if ignore["disk"] {
 					continue
 				}
-				if _, ok := nodeSeen[disk]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: disk, Type: "disk", Name: disk})
-					nodeSeen[disk] = struct{}{}
-				}
+                                if _, ok := nodeSeen[disk]; !ok {
+                                        graph.Nodes = append(graph.Nodes, Node{ID: disk, Type: "disk", Name: disk})
+                                        nodeSeen[disk] = struct{}{}
+                                }
 				graph.Links = append(graph.Links, Link{Source: disk, Target: v.Name})
 			}
 		}
@@ -415,35 +428,67 @@ func getHostIfaces(client *http.Client, host, ticket, node string) ([]ifaceInfo,
 	return ifaces, nil
 }
 
+func getHostStatus(client *http.Client, host, ticket, node string) (map[string]interface{}, error) {
+        req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api2/json/nodes/%s/status", host, node), nil)
+        req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+        resp, err := client.Do(req)
+        if err != nil {
+                return nil, err
+        }
+        defer resp.Body.Close()
+        body, _ := io.ReadAll(resp.Body)
+        if resp.StatusCode != http.StatusOK {
+                return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+        }
+        var lr struct {
+                Data map[string]any `json:"data"`
+        }
+        if err := json.Unmarshal(body, &lr); err != nil {
+                return nil, err
+        }
+        info := map[string]interface{}{}
+        for _, k := range []string{"mem", "maxmem", "cpu", "maxcpu", "uptime"} {
+                if val, ok := lr.Data[k]; ok {
+                        info[k] = val
+                }
+        }
+        return info, nil
+}
+
 func getVMs(client *http.Client, host, ticket string) ([]vmInfo, error) {
-	req, _ := http.NewRequest("GET", host+"/api2/json/cluster/resources?type=vm", nil)
-	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
-	}
-	var lr struct {
-		Data []struct {
-			VMID json.Number `json:"vmid"`
-			Name string      `json:"name"`
-			Node string      `json:"node"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &lr); err != nil {
-		return nil, err
-	}
-	var vms []vmInfo
-	for _, d := range lr.Data {
-		if d.VMID.String() != "" && d.Name != "" {
-			vms = append(vms, vmInfo{Node: d.Node, VMID: d.VMID.String(), Name: d.Name})
-		}
-	}
-	return vms, nil
+        req, _ := http.NewRequest("GET", host+"/api2/json/cluster/resources?type=vm", nil)
+        req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+        resp, err := client.Do(req)
+        if err != nil {
+                return nil, err
+        }
+        defer resp.Body.Close()
+        body, _ := io.ReadAll(resp.Body)
+        if resp.StatusCode != http.StatusOK {
+                return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+        }
+        var lr struct {
+                Data []map[string]any `json:"data"`
+        }
+        if err := json.Unmarshal(body, &lr); err != nil {
+                return nil, err
+        }
+        var vms []vmInfo
+        for _, d := range lr.Data {
+                vmid := fmt.Sprint(d["vmid"])
+                name := fmt.Sprint(d["name"])
+                node := fmt.Sprint(d["node"])
+                if vmid != "" && name != "" {
+                        info := map[string]interface{}{}
+                        for _, k := range []string{"status", "maxmem", "mem", "maxdisk", "disk", "cpu"} {
+                                if val, ok := d[k]; ok {
+                                        info[k] = val
+                                }
+                        }
+                        vms = append(vms, vmInfo{Node: node, VMID: vmid, Name: name, Info: info})
+                }
+        }
+        return vms, nil
 }
 
 func getVMIfaces(client *http.Client, host, ticket string, vm vmInfo) ([]string, error) {
