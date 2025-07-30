@@ -37,7 +37,11 @@ let typeHide = [];
 let hiddenTypes = new Set(['disk']);
 let showHideNodes = false;
 let nodeHide = [];
+let nodeHideSearch = '';
 let hiddenNodes = new Set();
+$: filteredNodeHide = nodeHide.filter(nh =>
+    nh.name.toLowerCase().includes(nodeHideSearch.toLowerCase()));
+$: displayNodeHide = nodeHideSearch ? filteredNodeHide : filteredNodeHide.slice(0, 10);
 let fixMode = false;
 let showInfo = false;
 let infoNode = null;
@@ -88,6 +92,7 @@ function openHideDialog(){
 
 function openHideNodesDialog(){
     nodeHide = graph.nodes.map(n => ({id: n.id, name: n.name || n.id, visible: !hiddenNodes.has(n.id)}));
+    nodeHideSearch = '';
     showHideNodes = true;
 }
 
@@ -402,7 +407,8 @@ function applyHideNodes() {
     <div class="dialog">
         <div class="dialog-content">
             <h3>Hide Nodes</h3>
-            {#each nodeHide as nh}
+            <input type="text" placeholder="Search..." bind:value={nodeHideSearch} style="margin-bottom:4px;width:100%;"/>
+            {#each displayNodeHide as nh}
             <div class="weight-row">
                 <span>{nh.name}</span>
                 <input type="checkbox" bind:checked={nh.visible}>
