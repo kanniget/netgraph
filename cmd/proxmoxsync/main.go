@@ -203,11 +203,22 @@ func main() {
 		}
 		logf("retrieved %d VMs", len(vms))
 
+		haStates, err := getHAStates(client, *host, ticket)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "get HA states error:", err)
+		}
+
 		for _, v := range vms {
 			info, ifaces, disks, err := getVMDetails(client, *host, ticket, v)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "get vm details error:", err)
 				continue
+			}
+			if ha, ok := haStates[v.VMID]; ok {
+				if info == nil {
+					info = make(map[string]string)
+				}
+				info["ha"] = ha
 			}
 			if _, ok := nodeSeen[v.Name]; !ok {
 				graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name, Info: info})
@@ -630,13 +641,49 @@ func getVMDetails(client *http.Client, host, ticket string, vm vmInfo) (map[stri
 			var st struct {
 				Data struct {
 					Status string `json:"status"`
+					Mem    int64  `json:"mem"`
+					MaxMem int64  `json:"maxmem"`
+					Cpus   int    `json:"cpus"`
 				} `json:"data"`
 			}
 			if err := json.Unmarshal(body, &st); err == nil {
 				info["status"] = st.Data.Status
+				info["mem"] = fmt.Sprintf("%d/%d MB", st.Data.Mem/1024/1024, st.Data.MaxMem/1024/1024)
+				info["processors"] = fmt.Sprintf("%d", st.Data.Cpus)
 			}
 		}
 	}
 
 	return info, ifaces, disks, nil
+}
+
+func getHAStates(client *http.Client, host, ticket string) (map[string]string, error) {
+	req, _ := http.NewRequest("GET", host+"/api2/json/cluster/ha/resources", nil)
+	req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+	}
+	var lr struct {
+		Data []struct {
+			SID   string `json:"sid"`
+			State string `json:"state"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &lr); err != nil {
+		return nil, err
+	}
+	states := make(map[string]string)
+	for _, d := range lr.Data {
+		if strings.HasPrefix(d.SID, "vm:") {
+			vmid := strings.TrimPrefix(d.SID, "vm:")
+			states[vmid] = d.State
+		}
+	}
+	return states, nil
 }
