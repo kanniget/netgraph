@@ -10,7 +10,8 @@ const icons = {
     fw: '/icons/shield-check.svg',
     zone: '/icons/wifi.svg',
     bridge: '/icons/bridge.svg',
-    nic: '/icons/nic.svg'
+    nic: '/icons/nic.svg',
+    disk: '/icons/disk.svg'
 };
 
 let graph = {nodes:[], links:[]};
@@ -33,7 +34,7 @@ let locatedNodeId = '';
 let highlightedNode = null;
 let showHide = false;
 let typeHide = [];
-let hiddenTypes = new Set();
+let hiddenTypes = new Set(['disk']);
 
 function nodeType(nodeRef){
     if(typeof nodeRef === 'object' && nodeRef !== null){

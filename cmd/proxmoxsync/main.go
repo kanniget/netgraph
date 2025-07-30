@@ -200,25 +200,43 @@ func main() {
 			}
 		}
 
-		for _, v := range vms {
-			logf("retrieving interfaces for VM %s", v.Name)
-			ifaces, err := getVMIfaces(client, *host, ticket, v)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "get vm interfaces error:", err)
-				continue
-			}
-			logf("VM %s has %d interfaces", v.Name, len(ifaces))
-			for _, iface := range ifaces {
-				if ignore["bridge"] {
-					continue
-				}
-				if _, ok := nodeSeen[iface]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
-					nodeSeen[iface] = struct{}{}
-				}
-				graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
-			}
-		}
+               for _, v := range vms {
+                       logf("retrieving interfaces for VM %s", v.Name)
+                       ifaces, err := getVMIfaces(client, *host, ticket, v)
+                       if err != nil {
+                               fmt.Fprintln(os.Stderr, "get vm interfaces error:", err)
+                               continue
+                       }
+                       logf("VM %s has %d interfaces", v.Name, len(ifaces))
+                       for _, iface := range ifaces {
+                               if ignore["bridge"] {
+                                       continue
+                               }
+                               if _, ok := nodeSeen[iface]; !ok {
+                                       graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
+                                       nodeSeen[iface] = struct{}{}
+                               }
+                               graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
+                       }
+
+                        logf("retrieving disks for VM %s", v.Name)
+                        disks, err := getVMDisks(client, *host, ticket, v)
+                        if err != nil {
+                                fmt.Fprintln(os.Stderr, "get vm disks error:", err)
+                                continue
+                        }
+                        logf("VM %s has %d disks", v.Name, len(disks))
+                        for _, disk := range disks {
+                                if ignore["disk"] {
+                                        continue
+                                }
+                                if _, ok := nodeSeen[disk]; !ok {
+                                        graph.Nodes = append(graph.Nodes, Node{ID: disk, Type: "disk", Name: disk})
+                                        nodeSeen[disk] = struct{}{}
+                                }
+                                graph.Links = append(graph.Links, Link{Source: disk, Target: v.Name})
+                        }
+               }
 	}
 
 	b, err := json.MarshalIndent(graph, "", "  ")
@@ -463,4 +481,40 @@ func getVMIfaces(client *http.Client, host, ticket string, vm vmInfo) ([]string,
 		}
 	}
 	return ifaces, nil
+}
+
+func getVMDisks(client *http.Client, host, ticket string, vm vmInfo) ([]string, error) {
+    req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api2/json/nodes/%s/qemu/%s/config", host, vm.Node, vm.VMID), nil)
+    req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+    resp, err := client.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    body, _ := io.ReadAll(resp.Body)
+    if resp.StatusCode != http.StatusOK {
+        return nil, fmt.Errorf("status %s: %s", resp.Status, string(body))
+    }
+    var cfg struct {
+        Data map[string]any `json:"data"`
+    }
+    if err := json.Unmarshal(body, &cfg); err != nil {
+        return nil, err
+    }
+    var disks []string
+    for k, v := range cfg.Data {
+        if strings.HasPrefix(k, "scsi") || strings.HasPrefix(k, "sata") || strings.HasPrefix(k, "ide") || strings.HasPrefix(k, "virtio") {
+            if val, ok := v.(string); ok {
+                parts := strings.Split(val, ",")
+                if len(parts) > 0 {
+                    disk := parts[0]
+                    disk = strings.TrimSpace(disk)
+                    if disk != "" {
+                        disks = append(disks, disk)
+                    }
+                }
+            }
+        }
+    }
+    return disks, nil
 }
