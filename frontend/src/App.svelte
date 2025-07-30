@@ -35,6 +35,7 @@ let highlightedNode = null;
 let showHide = false;
 let typeHide = [];
 let hiddenTypes = new Set(['disk']);
+let fixMode = false;
 
 function nodeType(nodeRef){
     if(typeof nodeRef === 'object' && nodeRef !== null){
@@ -198,10 +199,15 @@ function draw(){
         event.subject.fy = event.y;
     }
 
-function dragended(event) {
+    function dragended(event) {
         if (!event.active) simulation.alphaTarget(0);
-        event.subject.fx = null;
-        event.subject.fy = null;
+        if (fixMode) {
+            event.subject.fx = event.x;
+            event.subject.fy = event.y;
+        } else {
+            event.subject.fx = null;
+            event.subject.fy = null;
+        }
     }
 }
 
@@ -307,6 +313,9 @@ function applyHide() {
         <button on:click={openWeightsDialog} style="margin-left:4px;">Weights</button>
         <button on:click={openAttractDialog} style="margin-left:4px;">Attractiveness</button>
         <button on:click={openHideDialog} style="margin-left:4px;">Hide Types</button>
+        <label style="margin-left:4px;">
+            <input type="checkbox" bind:checked={fixMode}> Fix Mode
+        </label>
         <input type="color" bind:value={pathColor} on:input={updateHighlights} style="margin-left:4px;" title="Path color"/>
         <select bind:value={locatedNodeId} on:change={highlightFromList} style="margin-left:4px;">
             <option value="">Find node...</option>
