@@ -16,9 +16,10 @@ type Graph struct {
 }
 
 type Node struct {
-	ID   string `json:"id"`
-	Type string `json:"type"`
-	Name string `json:"name"`
+	ID   string         `json:"id"`
+	Type string         `json:"type"`
+	Name string         `json:"name"`
+	Info map[string]any `json:"info,omitempty"`
 }
 
 type Link struct {

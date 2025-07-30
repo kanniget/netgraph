@@ -36,6 +36,7 @@ let showHide = false;
 let typeHide = [];
 let hiddenTypes = new Set(['disk']);
 let fixMode = false;
+let infoNode = null;
 
 function nodeType(nodeRef){
     if(typeof nodeRef === 'object' && nodeRef !== null){
@@ -153,6 +154,7 @@ function draw(){
             .on('drag', dragged)
             .on('end', dragended));
     nodeSelection.on('click', nodeClicked);
+    nodeSelection.on('dblclick', nodeDoubleClicked);
 
     nodeSelection.append('image')
         .attr('href', d => icons[d.type])
@@ -273,6 +275,14 @@ function nodeClicked(event, d){
     updateHighlights();
 }
 
+function nodeDoubleClicked(event, d){
+    infoNode = d;
+}
+
+function closeInfo(){
+    infoNode = null;
+}
+
 function applyWeights() {
     graph.links.forEach(l => {
         const sType = nodeType(l.source);
@@ -371,6 +381,17 @@ function applyHide() {
             <div class="buttons">
                 <button on:click={applyHide}>Apply</button>
                 <button on:click={() => showHide = false}>Close</button>
+            </div>
+        </div>
+    </div>
+    {/if}
+    {#if infoNode}
+    <div class="dialog">
+        <div class="dialog-content">
+            <h3>{infoNode.name || infoNode.id}</h3>
+            <pre>{JSON.stringify(infoNode.info, null, 2)}</pre>
+            <div class="buttons">
+                <button on:click={closeInfo}>Close</button>
             </div>
         </div>
     </div>

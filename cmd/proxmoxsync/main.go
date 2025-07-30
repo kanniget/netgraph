@@ -27,9 +27,10 @@ type Graph struct {
 }
 
 type Node struct {
-	ID   string `json:"id"`
-	Type string `json:"type"`
-	Name string `json:"name"`
+	ID   string         `json:"id"`
+	Type string         `json:"type"`
+	Name string         `json:"name"`
+	Info map[string]any `json:"info,omitempty"`
 }
 
 type Link struct {
@@ -97,7 +98,22 @@ func main() {
 	}
 
 	graph := Graph{}
-	nodeSeen := make(map[string]struct{})
+	nodeMap := make(map[string]*Node)
+	addNode := func(n Node) {
+		if existing, ok := nodeMap[n.ID]; ok {
+			if n.Info != nil {
+				if existing.Info == nil {
+					existing.Info = make(map[string]any)
+				}
+				for k, v := range n.Info {
+					existing.Info[k] = v
+				}
+			}
+		} else {
+			graph.Nodes = append(graph.Nodes, n)
+			nodeMap[n.ID] = &graph.Nodes[len(graph.Nodes)-1]
+		}
+	}
 
 	if !ignore["zone"] {
 		logf("retrieving zones")
@@ -108,10 +124,7 @@ func main() {
 		logf("retrieved %d zones", len(zones))
 
 		for _, z := range zones {
-			if _, ok := nodeSeen[z]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: z, Type: "zone", Name: z})
-				nodeSeen[z] = struct{}{}
-			}
+			addNode(Node{ID: z, Type: "zone", Name: z})
 		}
 	}
 
@@ -124,22 +137,20 @@ func main() {
 		logf("retrieved %d networks", len(networks))
 
 		for _, n := range networks {
-			if _, ok := nodeSeen[n.ID]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: n.ID, Type: "net", Name: n.ID})
-				nodeSeen[n.ID] = struct{}{}
+			info := map[string]any{}
+			if n.Zone != "" {
+				info["zone"] = n.Zone
 			}
+			if n.Bridge != "" {
+				info["bridge"] = n.Bridge
+			}
+			addNode(Node{ID: n.ID, Type: "net", Name: n.ID, Info: info})
 			if n.Zone != "" && !ignore["zone"] {
-				if _, ok := nodeSeen[n.Zone]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: n.Zone, Type: "zone", Name: n.Zone})
-					nodeSeen[n.Zone] = struct{}{}
-				}
+				addNode(Node{ID: n.Zone, Type: "zone", Name: n.Zone})
 				graph.Links = append(graph.Links, Link{Source: n.ID, Target: n.Zone})
 			}
 			if n.Bridge != "" && !ignore["bridge"] {
-				if _, ok := nodeSeen[n.Bridge]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: n.Bridge, Type: "bridge", Name: n.Bridge})
-					nodeSeen[n.Bridge] = struct{}{}
-				}
+				addNode(Node{ID: n.Bridge, Type: "bridge", Name: n.Bridge})
 				graph.Links = append(graph.Links, Link{Source: n.ID, Target: n.Bridge})
 			}
 		}
@@ -154,11 +165,6 @@ func main() {
 		logf("retrieved %d hosts", len(hosts))
 
 		for _, h := range hosts {
-			if _, ok := nodeSeen[h]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: h, Type: "host", Name: h})
-				nodeSeen[h] = struct{}{}
-			}
-
 			logf("retrieving interfaces for host %s", h)
 			ifaces, err := getHostIfaces(client, *host, ticket, h)
 			if err != nil {
@@ -166,6 +172,12 @@ func main() {
 				continue
 			}
 			logf("host %s has %d interfaces", h, len(ifaces))
+			ifaceList := []map[string]string{}
+			for _, iface := range ifaces {
+				ifaceList = append(ifaceList, map[string]string{"name": iface.Name, "kind": iface.Kind})
+			}
+			addNode(Node{ID: h, Type: "host", Name: h, Info: map[string]any{"interfaces": ifaceList}})
+
 			for _, iface := range ifaces {
 				nodeType := iface.Kind
 				if nodeType == "bridge" || nodeType == "OVSBridge" {
@@ -176,10 +188,7 @@ func main() {
 				if ignore[nodeType] {
 					continue
 				}
-				if _, ok := nodeSeen[iface.Name]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: iface.Name, Type: nodeType, Name: iface.Name})
-					nodeSeen[iface.Name] = struct{}{}
-				}
+				addNode(Node{ID: iface.Name, Type: nodeType, Name: iface.Name, Info: map[string]any{"host": h, "kind": iface.Kind}})
 				graph.Links = append(graph.Links, Link{Source: iface.Name, Target: h})
 			}
 		}
@@ -194,13 +203,6 @@ func main() {
 		logf("retrieved %d VMs", len(vms))
 
 		for _, v := range vms {
-			if _, ok := nodeSeen[v.Name]; !ok {
-				graph.Nodes = append(graph.Nodes, Node{ID: v.Name, Type: "vm", Name: v.Name})
-				nodeSeen[v.Name] = struct{}{}
-			}
-		}
-
-		for _, v := range vms {
 			logf("retrieving interfaces for VM %s", v.Name)
 			ifaces, err := getVMIfaces(client, *host, ticket, v)
 			if err != nil {
@@ -208,32 +210,25 @@ func main() {
 				continue
 			}
 			logf("VM %s has %d interfaces", v.Name, len(ifaces))
-			for _, iface := range ifaces {
-				if ignore["bridge"] {
-					continue
-				}
-				if _, ok := nodeSeen[iface]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: iface, Type: "bridge", Name: iface})
-					nodeSeen[iface] = struct{}{}
-				}
-				graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
-			}
-
-			logf("retrieving disks for VM %s", v.Name)
 			disks, err := getVMDisks(client, *host, ticket, v)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "get vm disks error:", err)
 				continue
 			}
 			logf("VM %s has %d disks", v.Name, len(disks))
+			addNode(Node{ID: v.Name, Type: "vm", Name: v.Name, Info: map[string]any{"node": v.Node, "vmid": v.VMID, "interfaces": ifaces, "disks": disks}})
+			for _, iface := range ifaces {
+				if ignore["bridge"] {
+					continue
+				}
+				addNode(Node{ID: iface, Type: "bridge", Name: iface})
+				graph.Links = append(graph.Links, Link{Source: iface, Target: v.Name})
+			}
 			for _, disk := range disks {
 				if ignore["disk"] {
 					continue
 				}
-				if _, ok := nodeSeen[disk]; !ok {
-					graph.Nodes = append(graph.Nodes, Node{ID: disk, Type: "disk", Name: disk})
-					nodeSeen[disk] = struct{}{}
-				}
+				addNode(Node{ID: disk, Type: "disk", Name: disk, Info: map[string]any{"vm": v.Name}})
 				graph.Links = append(graph.Links, Link{Source: disk, Target: v.Name})
 			}
 		}

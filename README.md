@@ -31,7 +31,7 @@ so that generated graph files are persisted on the host.
 
 ## Proxmox Sync Tool
 
-A helper CLI `proxmoxsync` queries a Proxmox host using the REST API and writes a graph definition to `data/graph.json`.
+A helper CLI `proxmoxsync` queries a Proxmox host using the REST API and writes a graph definition to `data/graph.json`. Node entries include extra metadata like network zones, host interface lists and VM disk details.
 Use `-file` to change the output file and `-insecure` to skip TLS certificate verification if needed.
 The `-ignore` flag excludes specific node types from the collected graph. For example `-i zone` skips SDN zones.
 The `-host` flag expects only the base URL of the Proxmox instance (e.g.
@@ -70,5 +70,6 @@ displayed:
 
 The graph supports mouse wheel zooming and panning by dragging empty space. You
 can drag nodes to reposition them. Clicking two nodes highlights the path
-between them using the chosen colour.
+between them using the chosen colour. Double‑click a node to view its collected
+metadata in a popup dialog.
 
