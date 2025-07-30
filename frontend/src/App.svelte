@@ -35,6 +35,9 @@ let highlightedNode = null;
 let showHide = false;
 let typeHide = [];
 let hiddenTypes = new Set(['disk']);
+let showHideNodes = false;
+let nodeHide = [];
+let hiddenNodes = new Set();
 let fixMode = false;
 let showInfo = false;
 let infoNode = null;
@@ -83,6 +86,11 @@ function openHideDialog(){
     showHide = true;
 }
 
+function openHideNodesDialog(){
+    nodeHide = graph.nodes.map(n => ({id: n.id, name: n.name || n.id, visible: !hiddenNodes.has(n.id)}));
+    showHideNodes = true;
+}
+
 onMount(async () => {
     const fRes = await fetch('/api/files');
     files = await fRes.json();
@@ -124,7 +132,7 @@ function draw(){
 
     svg.call(zoom);
 
-    const nodes = graph.nodes.filter(n => !hiddenTypes.has(n.type));
+    const nodes = graph.nodes.filter(n => !hiddenTypes.has(n.type) && !hiddenNodes.has(n.id));
     const nodeIds = new Set(nodes.map(n => n.id));
     const links = graph.links.filter(l => {
         const s = typeof l.source === 'object' ? l.source.id : l.source;
@@ -309,6 +317,12 @@ function applyHide() {
     draw();
     showHide = false;
 }
+
+function applyHideNodes() {
+    hiddenNodes = new Set(nodeHide.filter(nh => !nh.visible).map(nh => nh.id));
+    draw();
+    showHideNodes = false;
+}
 </script>
 
 <main>
@@ -321,13 +335,14 @@ function applyHide() {
         <button on:click={openWeightsDialog} style="margin-left:4px;">Weights</button>
         <button on:click={openAttractDialog} style="margin-left:4px;">Attractiveness</button>
         <button on:click={openHideDialog} style="margin-left:4px;">Hide Types</button>
+        <button on:click={openHideNodesDialog} style="margin-left:4px;">Hide Nodes</button>
         <label style="margin-left:4px;">
             <input type="checkbox" bind:checked={fixMode}> Fix Mode
         </label>
         <input type="color" bind:value={pathColor} on:input={updateHighlights} style="margin-left:4px;" title="Path color"/>
         <select bind:value={locatedNodeId} on:change={highlightFromList} style="margin-left:4px;">
             <option value="">Find node...</option>
-            {#each graph.nodes.filter(n => !hiddenTypes.has(n.type)) as n}
+            {#each graph.nodes.filter(n => !hiddenTypes.has(n.type) && !hiddenNodes.has(n.id)) as n}
                 <option value={n.id}>{n.name || n.id}</option>
             {/each}
         </select>
@@ -379,6 +394,23 @@ function applyHide() {
             <div class="buttons">
                 <button on:click={applyHide}>Apply</button>
                 <button on:click={() => showHide = false}>Close</button>
+            </div>
+        </div>
+    </div>
+    {/if}
+    {#if showHideNodes}
+    <div class="dialog">
+        <div class="dialog-content">
+            <h3>Hide Nodes</h3>
+            {#each nodeHide as nh}
+            <div class="weight-row">
+                <span>{nh.name}</span>
+                <input type="checkbox" bind:checked={nh.visible}>
+            </div>
+            {/each}
+            <div class="buttons">
+                <button on:click={applyHideNodes}>Apply</button>
+                <button on:click={() => showHideNodes = false}>Close</button>
             </div>
         </div>
     </div>

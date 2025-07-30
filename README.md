@@ -67,6 +67,8 @@ displayed:
   simulation runs.
 * **Path colour picker** – select the colour used when highlighting paths
   between two nodes.
+* **Hide Types** – open a dialog to toggle visibility of each node type.
+* **Hide Nodes** – open a dialog to hide or show specific nodes by name.
 
 The graph supports mouse wheel zooming and panning by dragging empty space. You
 can drag nodes to reposition them. Clicking two nodes highlights the path
