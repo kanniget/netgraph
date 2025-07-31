@@ -19,6 +19,7 @@ const icons = {
 let graph = {nodes:[], links:[]};
 let files = [];
 let selectedFile = '';
+let showFileDialog = false;
 let showWeights = false;
 let typeWeights = [];
 let showAttract = false;
@@ -334,14 +335,9 @@ function applyHideNodes() {
 
 <Navbar />
 <div class="layout">
-    <Sidebar />
+    <Sidebar on:openFileDialog={() => showFileDialog = true} />
     <main>
     <div style="position:absolute;top:10px;left:10px;z-index:10;background:white;padding:4px;border-radius:4px;">
-        <select bind:value={selectedFile} on:change={loadGraph}>
-            {#each files as f}
-                <option value={f}>{f}</option>
-            {/each}
-        </select>
         <button on:click={openWeightsDialog} style="margin-left:4px;">Weights</button>
         <button on:click={openAttractDialog} style="margin-left:4px;">Attractiveness</button>
         <button on:click={openHideDialog} style="margin-left:4px;">Hide Types</button>
@@ -357,6 +353,22 @@ function applyHideNodes() {
             {/each}
         </select>
     </div>
+    {#if showFileDialog}
+    <div class="dialog">
+        <div class="dialog-content">
+            <h3>Select Graph File</h3>
+            <select bind:value={selectedFile} style="margin-bottom:4px;width:100%;">
+                {#each files as f}
+                    <option value={f}>{f}</option>
+                {/each}
+            </select>
+            <div class="buttons">
+                <button on:click={() => { loadGraph(); showFileDialog = false; }}>Open</button>
+                <button on:click={() => showFileDialog = false}>Close</button>
+            </div>
+        </div>
+    </div>
+    {/if}
     {#if showWeights}
     <div class="dialog">
         <div class="dialog-content">

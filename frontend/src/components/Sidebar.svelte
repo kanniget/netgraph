@@ -1,4 +1,7 @@
 <script>
+  import { createEventDispatcher } from 'svelte';
+  const dispatch = createEventDispatcher();
+
   const icons = [
     'cloud.svg',
     'server-stack.svg',
@@ -6,11 +9,17 @@
     'router-network.svg',
     'shield-check.svg'
   ];
+
+  function clickIcon(index) {
+    if (index === 0) {
+      dispatch('openFileDialog');
+    }
+  }
 </script>
 
 <aside class="sidebar">
-  {#each icons as icon}
-    <img src={'/icons/' + icon} alt={icon} />
+  {#each icons as icon, i}
+    <img src={'/icons/' + icon} alt={icon} on:click={() => clickIcon(i)} />
   {/each}
 </aside>
 
