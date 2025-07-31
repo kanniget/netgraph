@@ -1,6 +1,8 @@
 <script>
 import { onMount } from 'svelte';
 import * as d3 from 'd3';
+import Navbar from './components/Navbar.svelte';
+import Sidebar from './components/Sidebar.svelte';
 
 const icons = {
     net: '/icons/cloud.svg',
@@ -330,7 +332,10 @@ function applyHideNodes() {
 }
 </script>
 
-<main>
+<Navbar />
+<div class="layout">
+    <Sidebar />
+    <main>
     <div style="position:absolute;top:10px;left:10px;z-index:10;background:white;padding:4px;border-radius:4px;">
         <select bind:value={selectedFile} on:change={loadGraph}>
             {#each files as f}
@@ -438,8 +443,14 @@ function applyHideNodes() {
     {/if}
     <svg id="graph" style="width:100%; height:100%;"></svg>
 </main>
+</div>
 
 <style>
+.layout {
+    display: flex;
+    height: calc(100vh - 50px);
+}
+
 main,
 svg {
     width: 100%;
@@ -448,6 +459,7 @@ svg {
 
 main {
     position: relative;
+    flex: 1;
 }
 
 svg {
